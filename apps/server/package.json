@@ -1,0 +1,32 @@
+{
+  "name": "@ai-kanban/server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json && node scripts/prepare-static.mjs",
+    "start": "tsx src/index.ts",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-kanban/agent-protocol": "workspace:*",
+    "@ai-kanban/core": "workspace:*",
+    "@ai-kanban/db": "workspace:*",
+    "@ai-kanban/env": "workspace:*",
+    "@ai-kanban/integrations": "workspace:*",
+    "@hono/node-server": "^1.14.4",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "better-auth": "^1.2.9",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.8.2",
+    "node-cron": "^4.1.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@ai-kanban/config": "workspace:*",
+    "@types/node": "^22.15.29",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

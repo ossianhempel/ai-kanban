@@ -1,0 +1,20 @@
+# Production override for docker compose.
+# Usage: docker compose -f docker-compose.yml -f docs/deploy/examples/docker-compose.prod.yml up -d --build
+#
+# Requires .env with BETTER_AUTH_SECRET, BETTER_AUTH_URL, WEB_ORIGIN, etc.
+# See docs/deploy/azure-vm.md
+
+services:
+  ai-kanban:
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      AZURE_DEVOPS_WEBHOOK_SECRET: ${AZURE_DEVOPS_WEBHOOK_SECRET:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+    volumes:
+      - ./data:/app/data

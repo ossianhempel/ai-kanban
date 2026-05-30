@@ -1,0 +1,12 @@
+services:
+  ai-kanban:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-secret-change-me-in-prod!!}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      DATABASE_URL: file:/app/data/pglite
+      AIKANBAN_DATA_DIR: /app/data
+    volumes:
+      - ./data:/app/data

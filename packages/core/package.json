@@ -1,0 +1,19 @@
+{
+  "name": "@ai-kanban/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@ai-kanban/agent-protocol": "workspace:*",
+    "@ai-kanban/db": "workspace:*",
+    "drizzle-orm": "^0.44.2"
+  },
+  "devDependencies": {
+    "@ai-kanban/config": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@ai-kanban/agent-protocol",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@ai-kanban/config": "workspace:*",
+    "typescript": "^5.8.3"
+  }
+}

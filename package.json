@@ -1,0 +1,22 @@
+{
+  "name": "ai-kanban",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.20.0",
+  "scripts": {
+    "dev": "pnpm db:migrate && turbo dev --filter=@ai-kanban/server --filter=@ai-kanban/web",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "start": "pnpm --filter @ai-kanban/server start",
+    "cli": "pnpm --filter @ai-kanban/cli dev",
+    "db:generate": "turbo -F @ai-kanban/db db:generate",
+    "db:migrate": "turbo -F @ai-kanban/db db:migrate",
+    "db:push": "turbo -F @ai-kanban/db db:push",
+    "db:studio": "turbo -F @ai-kanban/db db:studio"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "turbo": "^2.6.3",
+    "typescript": "^5.8.3"
+  }
+}

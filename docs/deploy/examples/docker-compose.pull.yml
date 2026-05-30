@@ -1,0 +1,32 @@
+# Standalone production compose — pull a pre-built image (no git clone, no build).
+#
+# On the server:
+#   mkdir -p /opt/ai-kanban/data
+#   cp docker-compose.pull.yml /opt/ai-kanban/docker-compose.yml
+#   cp .env /opt/ai-kanban/.env
+#   docker compose pull && docker compose up -d
+#
+# Set AIKANBAN_IMAGE in .env to your registry path, e.g.:
+#   AIKANBAN_IMAGE=ghcr.io/YOUR_GITHUB_USER/ai-kanban:latest
+
+services:
+  ai-kanban:
+    image: ${AIKANBAN_IMAGE:-ghcr.io/YOUR_GITHUB_USER/ai-kanban:latest}
+    container_name: ai-kanban
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      AIKANBAN_DATA_DIR: /app/data
+      DATABASE_URL: file:/app/data/pglite
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      AZURE_DEVOPS_WEBHOOK_SECRET: ${AZURE_DEVOPS_WEBHOOK_SECRET:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+    volumes:
+      - ./data:/app/data

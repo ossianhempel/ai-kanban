@@ -1,0 +1,32 @@
+{
+  "name": "@ai-kanban/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./schema": {
+      "default": "./src/schema/index.ts"
+    }
+  },
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/migrate.ts",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "check-types": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-kanban/env": "workspace:*",
+    "@electric-sql/pglite": "^0.3.14",
+    "drizzle-orm": "^0.44.2"
+  },
+  "devDependencies": {
+    "@ai-kanban/config": "workspace:*",
+    "@types/node": "^22.15.29",
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

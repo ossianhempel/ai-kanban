@@ -1,0 +1,281 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { evaluateReadiness } from "@ai-kanban/agent-protocol";
+import { IconFolderOutline18, IconPlusOutline18 } from "nucleo-ui-essential-outline-18";
+import { AppHeader } from "@/components/app-header";
+import { KanbanBoard } from "@/components/kanban-board";
+import { TicketDetailPanel } from "@/components/ticket-detail-panel";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Icon } from "@/components/ui/icon";
+import { Input, Select, Textarea } from "@/components/ui/input";
+import { api, type Project, type Repository, type Ticket, type TicketStatus } from "@/lib/api";
+
+export function BoardPage() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>("");
+  const [selectedTicketRef, setSelectedTicketRef] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [acceptanceCriteria, setAcceptanceCriteria] = useState("");
+  const [businessContext, setBusinessContext] = useState("");
+  const [expectedOutcome, setExpectedOutcome] = useState("");
+  const [repositoryId, setRepositoryId] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [{ projects: nextProjects }, { tickets: nextTickets }, { repositories: nextRepos }] = await Promise.all([
+        api.listProjects(),
+        api.listTickets(selectedProject ? { projectSlug: selectedProject } : undefined),
+        api.listRepositories(),
+      ]);
+      setProjects(nextProjects);
+      setTickets(nextTickets);
+      setRepositories(nextRepos);
+      if (!selectedProject && nextProjects[0]) {
+        setSelectedProject(nextProjects[0].slug);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load board");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, [selectedProject]);
+
+  async function ensureDefaultProject() {
+    if (projects.length > 0) {
+      return projects[0]!;
+    }
+
+    const { project } = await api.createProject({
+      name: "Default Project",
+      slug: "default",
+      description: "Starter project for AI Kanban",
+    });
+    setProjects([project]);
+    setSelectedProject(project.slug);
+    return project;
+  }
+
+  async function handleCreateTicket(event: React.FormEvent) {
+    event.preventDefault();
+    if (!canSubmitIntake) {
+      return;
+    }
+
+    const project = projects.find((item) => item.slug === selectedProject) ?? (await ensureDefaultProject());
+    setError(null);
+    try {
+      await api.createTicket({
+        projectId: project.id,
+        title: title.trim(),
+        description: description.trim(),
+        acceptanceCriteria: acceptanceCriteria.trim(),
+        businessContext: businessContext.trim(),
+        expectedOutcome: expectedOutcome.trim(),
+        repositoryId: repositoryId || null,
+      });
+      setTitle("");
+      setDescription("");
+      setAcceptanceCriteria("");
+      setBusinessContext("");
+      setExpectedOutcome("");
+      setRepositoryId("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create ticket");
+    }
+  }
+
+  async function handleMoveTicket(ticket: Ticket, status: TicketStatus) {
+    const previousStatus = ticket.status;
+    setTickets((current) =>
+      current.map((item) => (item.id === ticket.id ? { ...item, status } : item)),
+    );
+    setError(null);
+
+    try {
+      await api.updateTicketStatus(ticket.ticketKey, status);
+    } catch (err) {
+      setTickets((current) =>
+        current.map((item) => (item.id === ticket.id ? { ...item, status: previousStatus } : item)),
+      );
+      setError(err instanceof Error ? err.message : "Failed to move ticket");
+    }
+  }
+
+  const activeProject = projects.find((item) => item.slug === selectedProject) ?? projects[0] ?? null;
+
+  const projectRepositories = repositories.filter(
+    (repo) => activeProject && repo.projectId === activeProject.id,
+  );
+
+  const intakeReadiness = useMemo(
+    () =>
+      evaluateReadiness({
+        title,
+        description,
+        acceptanceCriteria,
+        businessContext,
+        expectedOutcome,
+        repositoryId: repositoryId || null,
+      }),
+    [title, description, acceptanceCriteria, businessContext, expectedOutcome, repositoryId],
+  );
+
+  const canSubmitIntake = intakeReadiness.issues.length === 0;
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-5 px-5 py-6">
+      <AppHeader
+        eyebrow="AI-native control plane"
+        title="AI Kanban"
+        description="Prepare, validate, and orchestrate work for agents."
+        actions={
+          <>
+            <Link to="/repositories">
+              <Button variant="secondary" size="sm">
+                <Icon icon={IconFolderOutline18} size={16} stroke="fine" />
+                Repositories
+              </Button>
+            </Link>
+            <Link to="/settings">
+              <Button variant="secondary" size="sm">
+                Agent settings
+              </Button>
+            </Link>
+          </>
+        }
+      />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Intake</CardTitle>
+          <CardDescription>
+            Fill every field and link a repository. Team-wide agent context (repo map, shared docs) lives in{" "}
+            <Link to="/settings" className="text-[var(--color-text-strong)] underline-offset-2 hover:underline">
+              Agent settings
+            </Link>
+            .
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form className="grid gap-2.5 md:grid-cols-2" onSubmit={handleCreateTicket}>
+            <Select
+              className="md:col-span-2"
+              value={selectedProject}
+              onChange={(event) => setSelectedProject(event.target.value)}
+            >
+              {projects.length === 0 ? <option value="">Default</option> : null}
+              {projects.map((project) => (
+                <option key={project.id} value={project.slug}>
+                  {project.name}
+                </option>
+              ))}
+            </Select>
+            <Input
+              className="md:col-span-2"
+              placeholder="Title — what needs to happen?"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+            />
+            <Textarea
+              className="md:col-span-2"
+              placeholder="Description"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+            <Textarea
+              placeholder="Acceptance criteria (one per line)"
+              value={acceptanceCriteria}
+              onChange={(event) => setAcceptanceCriteria(event.target.value)}
+            />
+            <Textarea
+              placeholder="Business context"
+              value={businessContext}
+              onChange={(event) => setBusinessContext(event.target.value)}
+            />
+            <Textarea
+              className="md:col-span-2"
+              placeholder="Expected outcome"
+              value={expectedOutcome}
+              onChange={(event) => setExpectedOutcome(event.target.value)}
+            />
+            <Select
+              className="md:col-span-2"
+              value={repositoryId}
+              onChange={(event) => setRepositoryId(event.target.value)}
+            >
+              <option value="">
+                {projectRepositories.length === 0 ? "Add a repository first (required)" : "Select repository (required)"}
+              </option>
+              {projectRepositories.map((repo) => (
+                <option key={repo.id} value={repo.id}>
+                  {repo.name}
+                </option>
+              ))}
+            </Select>
+            {projectRepositories.length === 0 ? (
+              <p className="md:col-span-2 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+                Intake requires a linked repository.{" "}
+                <Link to="/repositories" className="text-[var(--color-text-strong)] underline-offset-2 hover:underline">
+                  Add one on Repositories
+                </Link>{" "}
+                (sign in required).
+              </p>
+            ) : null}
+            <div className="md:col-span-2 space-y-2">
+              {!canSubmitIntake ? (
+                <p className="text-[length:var(--text-xs)] text-[var(--color-warning)]">
+                  Still needed: {intakeReadiness.issues.join(" · ")}
+                </p>
+              ) : null}
+              <Button type="submit" size="sm" disabled={!canSubmitIntake}>
+                <Icon icon={IconPlusOutline18} size={16} stroke="fine" />
+                Add to Agent Ready
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+
+      {error ? <p className="text-[length:var(--text-sm)] text-[var(--color-danger)]">{error}</p> : null}
+      {loading ? (
+        <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">Loading board…</p>
+      ) : (
+        <KanbanBoard
+          tickets={tickets}
+          onSelectTicket={(ticket) => setSelectedTicketRef(ticket.ticketKey)}
+          onMoveTicket={(ticket, status) => void handleMoveTicket(ticket, status)}
+        />
+      )}
+
+      {selectedTicketRef ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/40"
+            aria-label="Close ticket panel"
+            onClick={() => setSelectedTicketRef(null)}
+          />
+          <TicketDetailPanel
+            ticketRef={selectedTicketRef}
+            repositories={repositories}
+            onClose={() => setSelectedTicketRef(null)}
+            onUpdated={() => void refresh()}
+          />
+        </>
+      ) : null}
+    </div>
+  );
+}
