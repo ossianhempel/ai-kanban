@@ -6,6 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import type { HttpBindings } from "@hono/node-server";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
+import type { Database } from "@ai-kanban/db";
 import { env } from "@ai-kanban/env/server";
 import type { Auth } from "./auth";
 import { createMcpServer } from "./mcp/server";
@@ -13,10 +14,15 @@ import type { RepositoryService } from "./services/repositories";
 import type { ConnectionService } from "./services/connections";
 import type { InstanceService, KnowledgeService } from "./services/knowledge";
 import type { TicketService } from "./services/tickets";
+import type { UserService } from "./services/users";
 import { createGitHubWebhookHandler } from "./webhooks/github";
 import { createAzureDevOpsWebhookHandler } from "./webhooks/azure-devops";
 import { ClaimNotAllowedError, IntakeValidationError } from "@ai-kanban/core";
 import { sourceProviderIdSchema } from "@ai-kanban/integrations";
+import { isAdmin, authorizeUser } from "./authz";
+import { getUserCount, resolveSignupPolicy } from "./signup-policy";
+import { buildPublicAuthConfig } from "./auth-providers";
+import { createApiTokenMiddleware, invalidateApiTokenUserCache } from "./api-token";
 
 const createProjectSchema = z.object({
   name: z.string().min(1),
@@ -122,13 +128,19 @@ const createKnowledgeRefSchema = z.object({
   url: z.string().url(),
 });
 
+const updateUserRoleSchema = z.object({
+  role: z.enum(["admin", "member"]),
+});
+
 export function createApp(
+  db: Database,
   auth: Auth,
   tickets: TicketService,
   repos: RepositoryService,
   connections: ConnectionService,
   instance: InstanceService,
   knowledge: KnowledgeService,
+  users: UserService,
 ) {
   const app = new Hono<{ Variables: AppVariables; Bindings: HttpBindings }>();
   const mcpServer = createMcpServer(tickets, repos);
@@ -159,7 +171,14 @@ export function createApp(
     await next();
   });
 
+  app.use("*", createApiTokenMiddleware(db));
+
   app.get("/health", (c) => c.json({ ok: true }));
+
+  app.get("/api/auth/config", async (c) => {
+    const userCount = await getUserCount(db);
+    return c.json(buildPublicAuthConfig(resolveSignupPolicy(userCount)));
+  });
 
   app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
@@ -169,7 +188,13 @@ export function createApp(
     if (!user || !session) {
       return c.json({ user: null, session: null });
     }
-    return c.json({ user, session });
+    return c.json({
+      user: {
+        ...user,
+        isAdmin: isAdmin(user),
+      },
+      session,
+    });
   });
 
   app.get("/api/projects", async (c) => {
@@ -177,9 +202,9 @@ export function createApp(
   });
 
   app.post("/api/projects", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+    const authResult = authorizeUser(c.get("user"));
+    if (!authResult.ok) {
+      return c.json({ error: authResult.error }, authResult.status);
     }
 
     const body = createProjectSchema.parse(await c.req.json());
@@ -193,9 +218,9 @@ export function createApp(
   });
 
   app.patch("/api/instance/settings", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
     }
 
     const body = updateInstanceSettingsSchema.parse(await c.req.json());
@@ -204,6 +229,35 @@ export function createApp(
       console.error("Failed to refresh ticket briefs after instance settings update", error);
     });
     return c.json({ settings });
+  });
+
+  app.get("/api/users", async (c) => {
+    const authResult = authorizeUser(c.get("user"), { admin: true });
+    if (!authResult.ok) {
+      return c.json({ error: authResult.error }, authResult.status);
+    }
+
+    return c.json({ users: await users.listUsers() });
+  });
+
+  app.patch("/api/users/:id/role", async (c) => {
+    const authResult = authorizeUser(c.get("user"), { admin: true });
+    if (!authResult.ok) {
+      return c.json({ error: authResult.error }, authResult.status);
+    }
+
+    const body = updateUserRoleSchema.parse(await c.req.json());
+    try {
+      const user = await users.updateUserRole(c.req.param("id"), body.role);
+      if (!user) {
+        return c.json({ error: "User not found" }, 404);
+      }
+      invalidateApiTokenUserCache();
+      return c.json({ user });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update user role";
+      return c.json({ error: message }, 400);
+    }
   });
 
   app.get("/api/knowledge-refs", async (c) => {
@@ -215,12 +269,14 @@ export function createApp(
   });
 
   app.post("/api/knowledge-refs", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+    const body = createKnowledgeRefSchema.parse(await c.req.json());
+    const auth = authorizeUser(c.get("user"), {
+      admin: body.scope === "instance" || body.scope === "project",
+    });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
     }
 
-    const body = createKnowledgeRefSchema.parse(await c.req.json());
     const ref = await knowledge.createRef(body);
     if (body.scope === "ticket" && body.ticketId) {
       void tickets.syncStoredBrief(body.ticketId).catch((error) => {
@@ -239,9 +295,16 @@ export function createApp(
   });
 
   app.delete("/api/knowledge-refs/:id", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+    const existing = await knowledge.getRef(c.req.param("id"));
+    if (!existing) {
+      return c.json({ error: "Knowledge ref not found" }, 404);
+    }
+
+    const auth = authorizeUser(c.get("user"), {
+      admin: existing.scope === "instance" || existing.scope === "project",
+    });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
     }
 
     const ref = await knowledge.deleteRef(c.req.param("id"));
@@ -265,9 +328,9 @@ export function createApp(
   });
 
   app.patch("/api/projects/:id/agent-context", async (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
     }
 
     const body = updateProjectContextSchema.parse(await c.req.json());

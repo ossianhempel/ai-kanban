@@ -18,6 +18,8 @@ RUN pnpm --filter @ai-kanban/server build
 
 FROM base AS runner
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV AIKANBAN_DATA_DIR=/app/data

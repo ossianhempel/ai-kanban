@@ -1,6 +1,8 @@
 # Deploy on Azure VM
 
-Deploy AI Kanban on an **Azure Linux VM** with Docker Compose and Caddy for HTTPS. This is the recommended Azure path for team use with **Azure DevOps** webhooks and embedded PGlite storage.
+Deploy AI Kanban on an **Azure Linux VM** with Docker Compose and Caddy for HTTPS.
+
+**New operator?** Start with the generic guide first: **[Install from source](./installation-from-source.md)** (clone, `.env`, update script). This doc adds Azure-specific steps (VM size, NSG, DNS).
 
 ## Why a VM (not Container Apps / App Service)
 

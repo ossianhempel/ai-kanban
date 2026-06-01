@@ -9,6 +9,7 @@
     "check-types": "turbo check-types",
     "start": "pnpm --filter @ai-kanban/server start",
     "cli": "pnpm --filter @ai-kanban/cli dev",
+    "update-installation": "bash scripts/update-installation.sh",
     "db:generate": "turbo -F @ai-kanban/db db:generate",
     "db:migrate": "turbo -F @ai-kanban/db db:migrate",
     "db:push": "turbo -F @ai-kanban/db db:push",

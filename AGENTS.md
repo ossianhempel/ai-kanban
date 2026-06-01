@@ -2,7 +2,7 @@
 
 Self-hostable, AI-native Kanban: humans intake work, agents claim tickets and get structured briefs, PR activity syncs back to the board.
 
-**Also read:** [README.md](./README.md) (overview), [docs/deploy/](./docs/deploy/README.md) (production hosting).
+**Also read:** [README.md](./README.md) (overview), [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md) (operator install + update), [docs/deploy/](./docs/deploy/README.md) (other hosting options).
 
 ---
 
@@ -41,6 +41,7 @@ pnpm db:generate      # new Drizzle migration from schema edits
 pnpm build            # production build
 pnpm start            # run built server only
 pnpm cli doctor       # API health check
+pnpm cli update       # git-clone install: pull + rebuild (see docs/deploy/installation-from-source.md)
 pnpm cli list         # list tickets
 ```
 
@@ -99,6 +100,16 @@ Open `/` — kanban board and ticket intake.
 Required for: repositories, agent settings, saving doc links, provider connections.
 
 `/login` or `/signup`
+
+**Auth methods** (operator-configured via env):
+
+| Method | Env |
+|--------|-----|
+| Email + password | default; disable with `AUTH_EMAIL_PASSWORD_ENABLED=false` |
+| Microsoft (Entra ID) | `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` |
+| GitHub / Google OAuth | `GITHUB_OAUTH_*`, `GOOGLE_*` |
+
+Sign-up allowlist (`SIGNUP_ALLOWED_DOMAINS`, etc.) applies to SSO too. First account is admin. See [docs/deploy/microsoft-sso.md](docs/deploy/microsoft-sso.md).
 
 ### Repositories (`/repositories`)
 
@@ -179,7 +190,7 @@ pnpm cli doctor
 pnpm cli list --status agent_ready
 pnpm cli get-task D-1
 pnpm cli claim D-1 --agent-id cursor
-pnpm cli update D-1 --status running
+pnpm cli set-status D-1 --status running
 pnpm cli link-pr D-1 --url "https://dev.azure.com/org/project/_git/repo/pullrequest/123"
 pnpm cli create-pr D-1 --head feature/my-branch --draft
 pnpm cli complete D-1 --summary "Done"
@@ -221,7 +232,7 @@ packages/integrations/   GitHub, Azure DevOps adapters; GitLab stubbed
 
 **Claim guard:** only `agent_ready` → `running` via claim.
 
-**Auth:** Better Auth at `/api/auth/*`; session cookie for web; many write routes require sign-in.
+**Auth:** Better Auth at `/api/auth/*`; session cookie for web; `AIKANBAN_API_TOKEN` Bearer acts as first admin for CLI/MCP when set.
 
 ### Monorepo conventions
 
@@ -241,8 +252,10 @@ packages/integrations/   GitHub, Azure DevOps adapters; GitLab stubbed
 | `POST /api/tickets` | Optional | Create (strict intake) |
 | `GET /api/tickets/:ref` | No | Full context + brief |
 | `POST /api/tickets/:ref/claim` | No | Agent claim |
-| `GET/PATCH /api/instance/settings` | PATCH: yes | Team playbook |
-| `GET/POST/DELETE /api/knowledge-refs` | POST/DELETE: yes | Doc links |
+| `GET /api/auth/config` | No | Sign-up policy + OAuth providers |
+| `GET/PATCH /api/instance/settings` | PATCH: admin | Team playbook |
+| `GET/PATCH /api/users/:id/role` | Admin | Member roles |
+| `GET/POST/DELETE /api/knowledge-refs` | POST/DELETE: auth (+ admin for instance/project) | Doc links |
 | `POST /api/webhooks/azure-devops` | Token query param | ADO PR sync |
 
 ---
@@ -260,6 +273,7 @@ packages/integrations/   GitHub, Azure DevOps adapters; GitLab stubbed
 | Doc | Contents |
 |-----|----------|
 | [README.md](./README.md) | Stack, MCP tool list, webhook details |
-| [docs/deploy/README.md](./docs/deploy/README.md) | Deploy model, env vars, examples |
-| [docs/deploy/azure-vm.md](./docs/deploy/azure-vm.md) | Azure VM step-by-step |
+| [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md) | Operator install + update |
+| [docs/deploy/README.md](./docs/deploy/README.md) | Deploy index |
+| [docs/deploy/azure-vm.md](./docs/deploy/azure-vm.md) | Azure VM specifics |
 | [docs/deploy/templates/](./docs/deploy/templates/README.md) | GitHub Actions CI/CD copy-paste |

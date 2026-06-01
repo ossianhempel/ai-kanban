@@ -34,6 +34,32 @@ export type InstanceSettings = {
   agentPlaybook: string;
 };
 
+export type SignupPolicy = {
+  enabled: boolean;
+  mode: "bootstrap" | "open" | "allowlist" | "closed";
+  hint: string | null;
+};
+
+export type AuthProvider = {
+  id: "microsoft" | "github" | "google";
+  label: string;
+  kind: "oauth";
+};
+
+export type AuthConfig = {
+  signup: SignupPolicy;
+  providers: AuthProvider[];
+  emailPassword: boolean;
+};
+
+export type UserSummary = {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "member";
+  createdAt: string;
+};
+
 export type KnowledgeRef = {
   id: string;
   scope: "instance" | "project" | "ticket";
@@ -190,6 +216,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  getAuthConfig: () => request<AuthConfig>("/api/auth/config"),
   listProjects: () => request<{ projects: Project[] }>("/api/projects"),
   createProject: (input: { name: string; slug: string; description?: string }) =>
     request<{ project: Project }>("/api/projects", {
@@ -338,6 +365,12 @@ export const api = {
     request<{ settings: InstanceSettings }>("/api/instance/settings", {
       method: "PATCH",
       body: JSON.stringify(input),
+    }),
+  listUsers: () => request<{ users: UserSummary[] }>("/api/users"),
+  updateUserRole: (userId: string, role: "admin" | "member") =>
+    request<{ user: UserSummary }>(`/api/users/${encodeURIComponent(userId)}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
     }),
   listKnowledgeRefs: (params: {
     scope: KnowledgeRef["scope"];

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { ticketStatusSchema } from "@ai-kanban/agent-protocol";
+import { updateInstallation } from "./update.js";
 
 const apiUrl = process.env.AIKANBAN_API_URL ?? "http://localhost:3000";
 const apiToken = process.env.AIKANBAN_API_TOKEN;
@@ -103,7 +104,7 @@ program
   });
 
 program
-  .command("update")
+  .command("set-status")
   .description("Update ticket status")
   .argument("<taskRef>", "Ticket id or key")
   .requiredOption("--status <status>", "New ticket status")
@@ -217,6 +218,34 @@ program
     const options = command.parent?.opts() as GlobalOptions;
     const payload = await request<{ ok: boolean }>("/health");
     printOutput({ ok: payload.ok, apiUrl }, options);
+  });
+
+program
+  .command("update")
+  .description("Update this git-clone installation (git pull + Docker rebuild)")
+  .option("--install-dir <path>", "Installation directory (auto-detect from cwd, or AIKANBAN_INSTALL_DIR)")
+  .option("--branch <branch>", "Git branch to pull", "main")
+  .option("--compose-prod <file>", "Production compose override file", "docker-compose.prod.yml")
+  .option("--dev", "Local dev install: git pull + pnpm install + db:migrate (no Docker)")
+  .action(async (flags, command) => {
+    const options = command.parent?.opts() as GlobalOptions;
+    try {
+      const result = await updateInstallation({
+        installDir: flags.installDir,
+        branch: flags.branch,
+        composeProd: flags.composeProd,
+        dev: flags.dev ?? false,
+      });
+      printOutput({ ok: true, ...result }, options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Update failed";
+      if (options.json) {
+        printOutput({ ok: false, error: message }, options);
+      } else {
+        process.stderr.write(`${message}\n`);
+      }
+      process.exitCode = 1;
+    }
   });
 
 await program.parseAsync(process.argv);

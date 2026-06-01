@@ -1,6 +1,9 @@
-# Deployment guides
+# Self-host AI Kanban for a team. One **Docker image**, many **hosting recipes** — pick the guide that matches how you run it.
 
-Self-host AI Kanban for a team. One **Docker image**, many **hosting recipes** — pick the guide and templates that match where you run it.
+## Start here
+
+**Running your own instance (not contributing code)?**  
+→ **[Install from source (git clone)](./installation-from-source.md)** — step-by-step for operators, includes `./scripts/update-installation.sh` and `pnpm cli update`.
 
 ## Deployment model
 
@@ -13,19 +16,22 @@ Self-host AI Kanban for a team. One **Docker image**, many **hosting recipes** �
 
 You do **not** need a second repository or a fork. Add workflows and secrets to the same `ai-kanban` repo, or run compose manually on a VM.
 
-### Three ways to get the image onto a server
+### Three ways to get the app onto a server
 
-| Path | When | VM needs |
-|------|------|----------|
-| **A — Pull image** | Production (recommended) | Docker, compose file, `.env` only |
-| **B — Clone + build** | No registry, private hack | Git, Docker, full repo clone |
-| **C — CI deploy** | Auto-update on git tag | Path A + GitHub Actions SSH deploy |
+| Path | When | Guide |
+|------|------|-------|
+| **Git clone + Docker (recommended early)** | Your own install, latest `main`, easy updates | [installation-from-source.md](./installation-from-source.md) |
+| **Pull pre-built image** | No git on server; tagged releases via GHCR | [examples/docker-compose.pull.yml](./examples/docker-compose.pull.yml) |
+| **CI auto-deploy** | Push tag → image → SSH pull on VM | [templates/](./templates/README.md) |
 
 ## Guides
 
-| Platform | Guide |
-|----------|-------|
-| **Azure VM** | [azure-vm.md](./azure-vm.md) |
+| Guide | Audience |
+|-------|----------|
+| **[Install from source](./installation-from-source.md)** | Operators — git clone, first run, update |
+| [Azure VM](./azure-vm.md) | Azure-specific (DNS, NSG, Caddy) |
+| [Coolify](./coolify.md) | Self-hosted PaaS on Hetzner / VPS |
+| [Microsoft SSO](./microsoft-sso.md) | Entra ID / Azure AD sign-in |
 
 ## Examples & templates
 

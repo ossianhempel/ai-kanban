@@ -17,9 +17,26 @@ const serverSchema = z.object({
   AIKANBAN_API_TOKEN: z.string().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
   AZURE_DEVOPS_WEBHOOK_SECRET: z.string().optional(),
+  ALLOW_PUBLIC_SIGNUP: z.coerce.boolean().optional(),
+  SIGNUP_ALLOWED_EMAILS: z.string().optional(),
+  SIGNUP_ALLOWED_DOMAINS: z.string().optional(),
+  AUTH_EMAIL_PASSWORD_ENABLED: z.coerce.boolean().optional(),
+  AUTH_PROVIDERS: z.string().optional(),
+  MICROSOFT_CLIENT_ID: z.string().optional(),
+  MICROSOFT_CLIENT_SECRET: z.string().optional(),
+  MICROSOFT_TENANT_ID: z.string().optional(),
+  GITHUB_OAUTH_CLIENT_ID: z.string().optional(),
+  GITHUB_OAUTH_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
 });
 
-export const env = serverSchema.parse(process.env);
+const parsed = serverSchema.parse(process.env);
+
+export const env = {
+  ...parsed,
+  ALLOW_PUBLIC_SIGNUP: parsed.ALLOW_PUBLIC_SIGNUP ?? parsed.NODE_ENV === "development",
+};
 
 export function resolveDataDir(dataDir = env.AIKANBAN_DATA_DIR) {
   return resolve(repoRoot, dataDir);

@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { IconArrowDoorOut3Outline18, IconUserOutline18 } from "nucleo-ui-essential-outline-18";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { signOut, useSession } from "@/lib/auth-client";
+import { signOut, useSession, type SessionUser } from "@/lib/auth-client";
+import { Badge } from "@/components/ui/badge";
 
 type AppHeaderProps = {
   eyebrow: string;
@@ -41,6 +42,11 @@ export function AppHeader({ eyebrow, title, description, actions }: AppHeaderPro
           <span className="px-2 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">…</span>
         ) : user ? (
           <>
+            {(user as SessionUser).role === "admin" ? (
+              <Badge tone="muted" className="hidden sm:inline-flex">
+                Admin
+              </Badge>
+            ) : null}
             <span className="hidden max-w-[180px] truncate px-2 text-[length:var(--text-sm)] text-[var(--color-text-default)] sm:inline">
               {user.name || user.email}
             </span>

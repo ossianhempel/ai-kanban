@@ -49,7 +49,8 @@ pnpm cli doctor
 pnpm cli list
 pnpm cli get-task TASK-1
 pnpm cli claim TASK-1 --agent-id cursor
-pnpm cli update TASK-1 --status running
+pnpm cli set-status TASK-1 --status running
+pnpm cli update              # git-clone install: pull + rebuild
 pnpm cli complete TASK-1 --summary "Done"
 ```
 
@@ -76,7 +77,11 @@ docker run \
 
 PGlite data persists under `./data/pglite`.
 
-**Production deploy:** [docs/deploy](./docs/deploy/README.md) — Azure VM guide, pull vs build paths, GitHub Actions templates, GHCR publish on `v*` tags.
+## Production deployment
+
+**Operator install (git clone + update):** [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md)
+
+Other hosting: [docs/deploy](./docs/deploy/README.md) — Azure VM, pull-based image, CI templates.
 
 ## Database switching
 

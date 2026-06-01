@@ -92,6 +92,11 @@ export function createKnowledgeService(db: Database) {
     return row ?? null;
   }
 
+  async function getRef(id: string) {
+    const [row] = await db.select().from(knowledgeRefs).where(eq(knowledgeRefs.id, id)).limit(1);
+    return row ?? null;
+  }
+
   async function deleteRef(id: string) {
     const [row] = await db.delete(knowledgeRefs).where(eq(knowledgeRefs.id, id)).returning();
     return row ?? null;
@@ -123,6 +128,7 @@ export function createKnowledgeService(db: Database) {
 
   return {
     listRefs,
+    getRef,
     createRef,
     deleteRef,
     resolveDocumentationForTicket,
