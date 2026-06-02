@@ -15,4 +15,6 @@ export const instanceSettings = pgTable("instance_settings", {
     .$type<Record<string, StoredAgentDirectiveOverride>>()
     .notNull()
     .default({}),
+  /** When set, MCP tools use this project slug when projectSlug/projectId is omitted. */
+  defaultProjectSlug: text("default_project_slug"),
 });

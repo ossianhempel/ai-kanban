@@ -1,0 +1,66 @@
+# Production stack: AI Kanban + Caddy (HTTPS). No git clone on the server.
+#
+# Prerequisites: DNS A/AAAA record for DOMAIN → this host; ports 80 and 443 open.
+#
+#   cp env.production.example .env   # edit DOMAIN and secrets
+#   docker compose -f docker-compose.stack.yml pull
+#   docker compose -f docker-compose.stack.yml up -d
+#
+# Or use: ./scripts/bootstrap-install.sh
+
+services:
+  ai-kanban:
+    image: ${AIKANBAN_IMAGE:-ghcr.io/ossianhempel/ai-kanban:latest}
+    container_name: ai-kanban
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      AIKANBAN_DATA_DIR: /app/data
+      DATABASE_URL: file:/app/data/pglite
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      AZURE_DEVOPS_WEBHOOK_SECRET: ${AZURE_DEVOPS_WEBHOOK_SECRET:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      AIKANBAN_API_TOKEN: ${AIKANBAN_API_TOKEN:-}
+      AIKANBAN_WEBHOOK_URL: ${AIKANBAN_WEBHOOK_URL:-}
+      ALLOW_PUBLIC_SIGNUP: ${ALLOW_PUBLIC_SIGNUP:-false}
+      SIGNUP_ALLOWED_DOMAINS: ${SIGNUP_ALLOWED_DOMAINS:-}
+      AUTH_PROVIDERS: ${AUTH_PROVIDERS:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      MICROSOFT_TENANT_ID: ${MICROSOFT_TENANT_ID:-}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ai-kanban-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      ai-kanban:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:

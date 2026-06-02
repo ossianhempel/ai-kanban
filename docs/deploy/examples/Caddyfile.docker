@@ -1,0 +1,4 @@
+# Used by docker-compose.stack.yml — DOMAIN is substituted from .env
+{$DOMAIN} {
+    reverse_proxy ai-kanban:3000
+}

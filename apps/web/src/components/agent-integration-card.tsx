@@ -51,7 +51,17 @@ export function AgentIntegrationCard() {
         <CardTitle>Agent integration (MCP)</CardTitle>
         <CardDescription>
           Install this hosted MCP in Cursor or Claude Desktop — no local server required. Point your client at this
-          instance and call tools like <code className="text-[length:var(--text-xs)]">aikanban_list_tasks</code>.
+          instance and call tools like <code className="text-[length:var(--text-xs)]">aikanban_list_tasks</code>.{" "}
+          <a
+            href="/docs/agent-loop"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[var(--color-text-strong)] underline-offset-2 hover:underline"
+          >
+            Agent loop guide
+          </a>
+          {" "}
+          (list → review → claim or clarify).
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -65,6 +75,14 @@ export function AgentIntegrationCard() {
         <div className="space-y-1">
           <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-strong)]">Available tools</p>
           <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">{config.tools.join(", ")}</p>
+        </div>
+
+        <div className="space-y-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-muted)] px-3 py-2">
+          <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-strong)]">Multiple projects</p>
+          <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">{config.multiProject.hint}</p>
+          <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+            Workflow: {config.multiProject.workflow.join(" → ")}
+          </p>
         </div>
 
         <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">

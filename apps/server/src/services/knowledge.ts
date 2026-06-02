@@ -26,12 +26,15 @@ export function createInstanceService(db: Database) {
     return created!;
   }
 
-  async function updateSettings(input: { agentPlaybook?: string }) {
+  async function updateSettings(input: { agentPlaybook?: string; defaultProjectSlug?: string | null }) {
     const current = await getSettings();
+    const nextDefaultSlug =
+      input.defaultProjectSlug !== undefined ? input.defaultProjectSlug : current.defaultProjectSlug;
     const [updated] = await db
       .update(instanceSettings)
       .set({
         agentPlaybook: input.agentPlaybook ?? current.agentPlaybook,
+        defaultProjectSlug: nextDefaultSlug,
       })
       .where(eq(instanceSettings.id, current.id))
       .returning();

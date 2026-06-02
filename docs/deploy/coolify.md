@@ -44,6 +44,8 @@ Set in the Coolify UI (or API on newer CLI versions):
 | `WEB_ORIGIN` | same as `BETTER_AUTH_URL` |
 | `ALLOW_PUBLIC_SIGNUP` | `false` |
 | `SIGNUP_ALLOWED_DOMAINS` | `yourcompany.com` |
+| `AIKANBAN_API_TOKEN` | `openssl rand -hex 32` (required for MCP write tools) |
+| `AIKANBAN_WEBHOOK_URL` | Optional Slack/Discord hook for agent clarification pings |
 
 See [env.production.example](./examples/env.production.example) and [Microsoft SSO](./microsoft-sso.md) for OAuth vars.
 

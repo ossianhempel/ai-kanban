@@ -2,7 +2,7 @@
 
 Self-hostable, AI-native Kanban: humans intake work, agents claim tickets and get structured briefs, PR activity syncs back to the board.
 
-**Also read:** [README.md](./README.md) (overview), [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md) (operator install + update), [docs/deploy/](./docs/deploy/README.md) (other hosting options).
+**Also read:** [README.md](./README.md) (overview), [docs/agent-loop.md](./docs/agent-loop.md) (MCP claim/clarify workflow), [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md) (operator install + update), [docs/deploy/](./docs/deploy/README.md) (other hosting options).
 
 ---
 
@@ -165,6 +165,8 @@ Ticket matched by: linked PR → branch name → ticket key in PR title/body (e.
 
 ### Typical loop
 
+Full walkthrough (Claude Desktop setup, starter prompt, troubleshooting): **[docs/agent-loop.md](./docs/agent-loop.md)**.
+
 1. `aikanban_list_projects` — project slugs for create
 2. `aikanban_list_tasks` — find `agent_ready` work (includes workflow hint)
 3. `aikanban_create_task` — spawn inbox drafts or strict agent-ready tickets
@@ -239,7 +241,9 @@ packages/integrations/   GitHub, Azure DevOps adapters; GitLab stubbed
 
 **Agent directives:** built-in prompts in `packages/agent-protocol/src/directives/templates/`; instance admins can override via **Settings → Agent workflow prompts** (stored in `instance_settings.agent_directive_overrides`).
 
-**Auth:** Better Auth at `/api/auth/*`; session cookie for web; `AIKANBAN_API_TOKEN` Bearer acts as first admin for CLI/MCP when set.
+**Auth:** Better Auth at `/api/auth/*`; session cookie for web; `AIKANBAN_API_TOKEN` Bearer acts as first admin for CLI/MCP when set. MCP **write** tools require the token when it is configured.
+
+**Notifications:** `AIKANBAN_WEBHOOK_URL` receives JSON POSTs for `clarification_request` (see [docs/agent-loop.md](./docs/agent-loop.md)).
 
 ### Monorepo conventions
 

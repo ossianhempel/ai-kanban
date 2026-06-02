@@ -63,6 +63,8 @@ export type DirectiveRenderContext = {
   nextStatus?: TicketStatus;
   nextStatusLabel?: string;
   commentKind?: string;
+  projectSlug?: string;
+  projectName?: string;
   tools: Record<DirectiveToolKey, McpToolName>;
 };
 
@@ -72,6 +74,8 @@ export type DirectiveContext = {
   filterStatus?: TicketStatus;
   nextStatus?: TicketStatus;
   commentKind?: string;
+  projectSlug?: string;
+  projectName?: string;
 };
 
 export type DirectiveTrigger =

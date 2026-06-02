@@ -1,0 +1,37 @@
+# HTTP-only stack (no TLS). For smoke tests or behind an Azure Application Gateway / corporate LB.
+#
+#   docker compose -f docker-compose.http.yml up -d
+#
+# Set WEB_ORIGIN and BETTER_AUTH_URL to the URL users actually open (http://<ip> or your LB URL).
+
+services:
+  ai-kanban:
+    image: ${AIKANBAN_IMAGE:-ghcr.io/ossianhempel/ai-kanban:latest}
+    container_name: ai-kanban
+    restart: unless-stopped
+    ports:
+      - "${AIKANBAN_HTTP_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      AIKANBAN_DATA_DIR: /app/data
+      DATABASE_URL: file:/app/data/pglite
+      WEB_ORIGIN: ${WEB_ORIGIN}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      AZURE_DEVOPS_WEBHOOK_SECRET: ${AZURE_DEVOPS_WEBHOOK_SECRET:-}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-}
+      AIKANBAN_API_TOKEN: ${AIKANBAN_API_TOKEN:-}
+      AIKANBAN_WEBHOOK_URL: ${AIKANBAN_WEBHOOK_URL:-}
+      ALLOW_PUBLIC_SIGNUP: ${ALLOW_PUBLIC_SIGNUP:-false}
+      SIGNUP_ALLOWED_DOMAINS: ${SIGNUP_ALLOWED_DOMAINS:-}
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s

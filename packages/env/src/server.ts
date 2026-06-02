@@ -15,6 +15,7 @@ const serverSchema = z.object({
   BETTER_AUTH_URL: z.string().url().default("http://localhost:5173"),
   WEB_ORIGIN: z.string().url().default("http://localhost:5173"),
   AIKANBAN_API_TOKEN: z.string().optional(),
+  AIKANBAN_WEBHOOK_URL: z.string().url().optional(),
   GITHUB_WEBHOOK_SECRET: z.string().optional(),
   AZURE_DEVOPS_WEBHOOK_SECRET: z.string().optional(),
   ALLOW_PUBLIC_SIGNUP: z.coerce.boolean().optional(),

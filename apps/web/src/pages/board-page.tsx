@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { evaluateReadiness } from "@ai-kanban/agent-protocol";
 import { IconFolderOutline18, IconPlusOutline18 } from "nucleo-ui-essential-outline-18";
 import { AppHeader } from "@/components/app-header";
@@ -10,13 +10,20 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { api, type Project, type Repository, type Ticket, type TicketStatus } from "@/lib/api";
+import { api, type Repository, type Ticket, type TicketStatus } from "@/lib/api";
+import { useProjectContext } from "@/lib/project-context";
 
 export function BoardPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const {
+    projects,
+    activeProjectSlug,
+    activeProject,
+    refreshProjects,
+    setActiveProjectSlug,
+  } = useProjectContext();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [selectedProject, setSelectedProject] = useState<string>("");
   const [selectedTicketRef, setSelectedTicketRef] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -31,17 +38,12 @@ export function BoardPage() {
     setLoading(true);
     setError(null);
     try {
-      const [{ projects: nextProjects }, { tickets: nextTickets }, { repositories: nextRepos }] = await Promise.all([
-        api.listProjects(),
-        api.listTickets(selectedProject ? { projectSlug: selectedProject } : undefined),
+      const [{ tickets: nextTickets }, { repositories: nextRepos }] = await Promise.all([
+        api.listTickets(activeProjectSlug ? { projectSlug: activeProjectSlug } : undefined),
         api.listRepositories(),
       ]);
-      setProjects(nextProjects);
       setTickets(nextTickets);
       setRepositories(nextRepos);
-      if (!selectedProject && nextProjects[0]) {
-        setSelectedProject(nextProjects[0].slug);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load board");
     } finally {
@@ -51,7 +53,28 @@ export function BoardPage() {
 
   useEffect(() => {
     void refresh();
-  }, [selectedProject]);
+  }, [activeProjectSlug]);
+
+  useEffect(() => {
+    const ticketFromUrl = searchParams.get("ticket");
+    if (ticketFromUrl) {
+      setSelectedTicketRef(ticketFromUrl);
+    }
+  }, [searchParams]);
+
+  function openTicket(ref: string) {
+    setSelectedTicketRef(ref);
+    const next = new URLSearchParams(searchParams);
+    next.set("ticket", ref);
+    setSearchParams(next, { replace: true });
+  }
+
+  function closeTicketPanel() {
+    setSelectedTicketRef(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete("ticket");
+    setSearchParams(next, { replace: true });
+  }
 
   async function ensureDefaultProject() {
     if (projects.length > 0) {
@@ -63,8 +86,8 @@ export function BoardPage() {
       slug: "default",
       description: "Starter project for AI Kanban",
     });
-    setProjects([project]);
-    setSelectedProject(project.slug);
+    await refreshProjects();
+    setActiveProjectSlug(project.slug);
     return project;
   }
 
@@ -76,7 +99,7 @@ export function BoardPage() {
       return;
     }
 
-    const project = projects.find((item) => item.slug === selectedProject) ?? (await ensureDefaultProject());
+    const project = activeProject ?? (await ensureDefaultProject());
     setError(null);
     try {
       await api.createTicket({
@@ -118,8 +141,6 @@ export function BoardPage() {
     }
   }
 
-  const activeProject = projects.find((item) => item.slug === selectedProject) ?? projects[0] ?? null;
-
   const projectRepositories = repositories.filter(
     (repo) => activeProject && repo.projectId === activeProject.id,
   );
@@ -139,6 +160,8 @@ export function BoardPage() {
 
   const canSubmitStrictIntake = intakeReadiness.issues.length === 0;
   const canSubmitInbox = title.trim().length > 0;
+  const clarificationCount = tickets.filter((ticket) => ticket.status === "needs_clarification").length;
+
   const intakeStarted =
     Boolean(title.trim()) ||
     Boolean(description.trim()) ||
@@ -189,18 +212,13 @@ export function BoardPage() {
               void handleCreateTicket("strict");
             }}
           >
-            <Select
-              className="md:col-span-2"
-              value={selectedProject}
-              onChange={(event) => setSelectedProject(event.target.value)}
-            >
-              {projects.length === 0 ? <option value="">Default</option> : null}
-              {projects.map((project) => (
-                <option key={project.id} value={project.slug}>
-                  {project.name}
-                </option>
-              ))}
-            </Select>
+            {activeProject ? (
+              <p className="md:col-span-2 text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">
+                Project: <span className="font-medium text-[var(--color-text-strong)]">{activeProject.name}</span>{" "}
+                <span className="font-mono text-[length:var(--text-xs)]">({activeProject.slug})</span> — switch in the
+                header.
+              </p>
+            ) : null}
             <Input
               className="md:col-span-2"
               placeholder="Title — what needs to happen?"
@@ -281,13 +299,22 @@ export function BoardPage() {
         </CardContent>
       </Card>
 
+      {clarificationCount > 0 ? (
+        <p className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-2 text-[length:var(--text-sm)] text-[var(--color-warning)]">
+          {clarificationCount} ticket{clarificationCount === 1 ? "" : "s"}{" "}
+          {clarificationCount === 1 ? "needs" : "need"} your input in{" "}
+          <span className="font-medium text-[var(--color-text-strong)]">Needs Clarification</span> — open the
+          ticket and reply in Comments.
+        </p>
+      ) : null}
+
       {error ? <p className="text-[length:var(--text-sm)] text-[var(--color-danger)]">{error}</p> : null}
       {loading ? (
         <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">Loading board…</p>
       ) : (
         <KanbanBoard
           tickets={tickets}
-          onSelectTicket={(ticket) => setSelectedTicketRef(ticket.ticketKey)}
+          onSelectTicket={(ticket) => openTicket(ticket.ticketKey)}
           onMoveTicket={(ticket, status) => void handleMoveTicket(ticket, status)}
         />
       )}
@@ -295,14 +322,14 @@ export function BoardPage() {
       <MotionOverlay
         open={Boolean(selectedTicketRef)}
         aria-label="Close ticket panel"
-        onClose={() => setSelectedTicketRef(null)}
+        onClose={closeTicketPanel}
       />
       <MotionSlidePanel open={Boolean(selectedTicketRef)}>
         {selectedTicketRef ? (
           <TicketDetailPanel
             ticketRef={selectedTicketRef}
             repositories={repositories}
-            onClose={() => setSelectedTicketRef(null)}
+            onClose={closeTicketPanel}
             onUpdated={() => void refresh()}
           />
         ) : null}

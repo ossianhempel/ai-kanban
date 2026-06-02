@@ -32,6 +32,10 @@ function interpolateBody(body: string, context: DirectiveRenderContext): string 
         return context.filterStatusLabel ?? "";
       case "nextStatusLabel":
         return context.nextStatusLabel ?? "";
+      case "projectSlug":
+        return context.projectSlug ?? "";
+      case "projectName":
+        return context.projectName ?? "";
       default:
         return `{{${key}}}`;
     }
@@ -63,6 +67,8 @@ export function buildRenderContext(input: {
   filterStatus?: TicketStatus;
   nextStatus?: TicketStatus;
   commentKind?: string;
+  projectSlug?: string;
+  projectName?: string;
 }): DirectiveRenderContext {
   return {
     ticketKey: input.ticketKey,
@@ -73,6 +79,8 @@ export function buildRenderContext(input: {
     nextStatus: input.nextStatus,
     nextStatusLabel: input.nextStatus ? statusLabel(input.nextStatus) : undefined,
     commentKind: input.commentKind,
+    projectSlug: input.projectSlug,
+    projectName: input.projectName,
     tools: { ...MCP_TOOL_NAMES },
   };
 }

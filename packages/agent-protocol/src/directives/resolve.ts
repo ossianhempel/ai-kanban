@@ -16,12 +16,14 @@ import {
   completeTaskDefault,
   completeTaskNoKey,
   createTaskDefault,
+  getProjectDefault,
   listProjectsDefault,
   getTaskContextTemplate,
   listAgentReady,
   listDefault,
   listFiltered,
   listReadyForPlanning,
+  listTasksProjectScoped,
   updateStatusAgentReady,
   updateStatusDefault,
   updateStatusNeedsClarification,
@@ -56,7 +58,10 @@ function render(
   return renderDirectiveTemplate(merged, buildRenderContext(context));
 }
 
-function resolveListTasksTemplate(filterStatus?: TicketStatus): DirectiveTemplate {
+function resolveListTasksTemplate(
+  filterStatus: TicketStatus | undefined,
+  projectSlug: string | undefined,
+): DirectiveTemplate {
   if (filterStatus === "agent_ready") {
     return listAgentReady;
   }
@@ -65,6 +70,9 @@ function resolveListTasksTemplate(filterStatus?: TicketStatus): DirectiveTemplat
   }
   if (filterStatus) {
     return listFiltered;
+  }
+  if (projectSlug) {
+    return listTasksProjectScoped;
   }
   return listDefault;
 }
@@ -115,7 +123,17 @@ export function resolveAgentDirective(
       return render(getTaskContextTemplate(context.status), context, overrides);
 
     case MCP_TOOL_NAMES.listTasks:
-      return render(resolveListTasksTemplate(context.filterStatus), context, overrides);
+      return render(
+        resolveListTasksTemplate(context.filterStatus, context.projectSlug),
+        context,
+        overrides,
+      );
+
+    case MCP_TOOL_NAMES.getProject:
+      if (!context.projectSlug) {
+        return null;
+      }
+      return render(getProjectDefault, context, overrides);
 
     case MCP_TOOL_NAMES.claimTask:
       if (!context.ticketKey) {

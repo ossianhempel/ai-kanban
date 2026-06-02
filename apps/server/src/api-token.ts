@@ -22,12 +22,22 @@ function safeEqual(left: string, right: string): boolean {
   return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function readBearerToken(authorization: string | undefined): string | null {
+export function readBearerToken(authorization: string | undefined): string | null {
   if (!authorization?.startsWith("Bearer ")) {
     return null;
   }
   const token = authorization.slice("Bearer ".length).trim();
   return token.length > 0 ? token : null;
+}
+
+/** Returns true when Authorization matches configured `AIKANBAN_API_TOKEN`. */
+export function isValidApiToken(authorization: string | undefined): boolean {
+  const configuredToken = env.AIKANBAN_API_TOKEN;
+  if (!configuredToken) {
+    return false;
+  }
+  const bearer = readBearerToken(authorization);
+  return bearer !== null && safeEqual(bearer, configuredToken);
 }
 
 let cachedApiUser: SessionUser | null | undefined;
@@ -70,8 +80,7 @@ export function createApiTokenMiddleware(db: Database) {
       return;
     }
 
-    const bearer = readBearerToken(c.req.header("Authorization"));
-    if (!bearer || !safeEqual(bearer, configuredToken)) {
+    if (!isValidApiToken(c.req.header("Authorization"))) {
       await next();
       return;
     }

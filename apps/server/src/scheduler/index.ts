@@ -5,6 +5,7 @@ import { scanRepository } from "@ai-kanban/integrations";
 import { eq } from "drizzle-orm";
 import cron from "node-cron";
 import type { TicketService } from "../services/tickets";
+import { deliverWebhookNotification } from "../services/notifications";
 
 export function startScheduler(db: Database, tickets: TicketService) {
   async function processJobs() {
@@ -44,7 +45,9 @@ export function startScheduler(db: Database, tickets: TicketService) {
           break;
         }
         case "enrich_ticket":
+          break;
         case "send_notification":
+          await deliverWebhookNotification(job.payload as Record<string, unknown>);
           break;
         default:
           throw new Error(`Unknown job type: ${job.type}`);

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ticketStatusSchema } from "./status.js";
 
-export { MCP_TOOL_NAMES } from "./tools.js";
+export { MCP_TOOL_NAMES, MCP_WRITE_TOOL_NAMES, MCP_WRITE_TOOL_SET } from "./tools.js";
 export type { McpToolName } from "./tools.js";
 export { ticketStatusSchema, type TicketStatus } from "./status.js";
 
@@ -42,9 +42,23 @@ export const completeTaskInputSchema = z.object({
 });
 
 export const listTasksInputSchema = z.object({
-  projectSlug: z.string().optional().describe("Filter by project slug"),
+  projectSlug: z
+    .string()
+    .optional()
+    .describe(
+      "Filter by project slug (e.g. platform, mobile). Omit only when the instance has a default project or a single project.",
+    ),
   status: ticketStatusSchema.optional().describe("Filter by ticket status"),
 });
+
+export const getProjectInputSchema = z.object({
+  projectSlug: z
+    .string()
+    .optional()
+    .describe("Project slug. Omit to use the instance default or the only project on the instance."),
+});
+
+export const listProjectsInputSchema = z.object({});
 
 export const linkPullRequestInputSchema = z.object({
   taskRef: z.string().min(1).describe("Ticket id or key like PROJ-123"),
@@ -78,7 +92,9 @@ export const createTaskInputSchema = z.object({
     .string()
     .min(1)
     .optional()
-    .describe("Project slug (e.g. default). Required unless projectId is set."),
+    .describe(
+      "Project slug (ticket keys use this prefix, e.g. PLATFORM-12). Uses instance default or sole project when omitted.",
+    ),
   projectId: z.string().uuid().optional().describe("Project UUID"),
   title: z.string().min(1).describe("Short task title"),
   description: z.string().optional().describe("What needs to be done"),
@@ -92,8 +108,6 @@ export const createTaskInputSchema = z.object({
     .optional()
     .describe("inbox = draft ticket; strict = require full intake (defaults to agent_ready or needs_clarification)"),
 });
-
-export const listProjectsInputSchema = z.object({});
 
 export * from "./readiness.js";
 export * from "./directives/index.js";

@@ -3,11 +3,14 @@ import { projects, repositories, ticketComments, tickets } from "@ai-kanban/db/s
 import {
   assertIntakeReady,
   ClaimNotAllowedError,
+  enqueueJob,
   evaluateReadiness,
   formatTicketKey,
   generateAgentBrief,
   parseTicketRef,
 } from "@ai-kanban/core";
+import { env } from "@ai-kanban/env/server";
+import { schema } from "@ai-kanban/db";
 import { type TicketCommentKind } from "@ai-kanban/agent-protocol";
 import { parsePullRequestUrl } from "@ai-kanban/integrations";
 import {
@@ -16,6 +19,7 @@ import {
   type GitHubPullRequestPayload,
   type NormalizedPullRequestEvent,
 } from "@ai-kanban/integrations";
+import { MCP_TOOL_NAMES } from "@ai-kanban/agent-protocol";
 import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { readRepositoryAgentGuide } from "@ai-kanban/integrations";
 import type { RepositoryService } from "./repositories";
@@ -165,7 +169,50 @@ export function createTicketService(
       throw new Error("Failed to add comment");
     }
 
-    return { ticket, comment };
+    let activeTicket = ticket;
+
+    if (kind === "clarification_request") {
+      const canMoveToClarification =
+        ticket.status === "inbox" ||
+        ticket.status === "agent_ready" ||
+        ticket.status === "ready_for_planning";
+
+      if (canMoveToClarification) {
+        const moved = await updateTicketStatus(ref, "needs_clarification");
+        if (moved) {
+          activeTicket = moved;
+        }
+      }
+
+      const [project] = await db.select().from(projects).where(eq(projects.id, ticket.projectId)).limit(1);
+      const ticketKey = project ? formatTicketKey(project.slug, ticket.number) : ticket.id;
+
+      let authorEmail: string | null = null;
+      let authorName: string | null = null;
+      if (ticket.createdById) {
+        const [author] = await db
+          .select({ email: schema.user.email, name: schema.user.name })
+          .from(schema.user)
+          .where(eq(schema.user.id, ticket.createdById))
+          .limit(1);
+        authorEmail = author?.email ?? null;
+        authorName = author?.name ?? null;
+      }
+
+      await enqueueJob(db, "send_notification", {
+        type: "clarification_request",
+        ticketKey,
+        ticketId: ticket.id,
+        ticketTitle: ticket.title,
+        agentId: input.agentId ?? null,
+        commentBody: trimmedBody,
+        authorEmail,
+        authorName,
+        ticketUrl: `${env.WEB_ORIGIN.replace(/\/$/, "")}/?ticket=${encodeURIComponent(ticketKey)}`,
+      });
+    }
+
+    return { ticket: activeTicket, comment };
   }
 
   async function listTickets(filters: { projectSlug?: string; status?: string } = {}) {
@@ -451,6 +498,70 @@ export function createTicketService(
     }
 
     return null;
+  }
+
+  async function resolveProjectForAgent(input: { projectId?: string; projectSlug?: string } = {}) {
+    if (input.projectId || input.projectSlug) {
+      const project = await resolveProject(input);
+      if (!project) {
+        throw new Error(
+          `Project not found: ${input.projectSlug ?? input.projectId}. Call ${MCP_TOOL_NAMES.listProjects} for valid slugs.`,
+        );
+      }
+      return project;
+    }
+
+    const allProjects = await listProjects();
+    if (allProjects.length === 0) {
+      throw new Error(
+        "No projects on this instance. Create a project in Agent settings or the web UI, then call aikanban_list_projects again.",
+      );
+    }
+
+    const settings = instance ? await instance.getSettings() : null;
+    const defaultSlug = settings?.defaultProjectSlug ?? null;
+    if (defaultSlug) {
+      const fromDefault = allProjects.find((project) => project.slug === defaultSlug);
+      if (fromDefault) {
+        return fromDefault;
+      }
+    }
+
+    if (allProjects.length === 1) {
+      return allProjects[0]!;
+    }
+
+    const slugs = allProjects.map((project) => project.slug).join(", ");
+    throw new Error(
+      `projectSlug is required (${allProjects.length} projects: ${slugs}). Call ${MCP_TOOL_NAMES.listProjects}, then ${MCP_TOOL_NAMES.getProject} with your slug.`,
+    );
+  }
+
+  async function getProjectForAgent(input: { projectSlug?: string } = {}) {
+    const project = await resolveProjectForAgent({ projectSlug: input.projectSlug });
+    return {
+      id: project.id,
+      name: project.name,
+      slug: project.slug,
+      description: project.description,
+      agentContext: project.agentContext,
+      ticketKeyPrefix: project.slug,
+    };
+  }
+
+  async function listProjectsForAgent() {
+    const projectRows = await listProjects();
+    const settings = instance ? await instance.getSettings() : null;
+    return {
+      projects: projectRows.map((project) => ({
+        id: project.id,
+        name: project.name,
+        slug: project.slug,
+        description: project.description,
+      })),
+      defaultProjectSlug: settings?.defaultProjectSlug ?? null,
+      projectCount: projectRows.length,
+    };
   }
 
   async function createProject(input: { name: string; slug: string; description?: string }) {
@@ -782,7 +893,10 @@ export function createTicketService(
     syncStoredBriefsForProject,
     syncAllStoredBriefs,
     listProjects,
+    listProjectsForAgent,
     resolveProject,
+    resolveProjectForAgent,
+    getProjectForAgent,
     createProject,
   };
 }

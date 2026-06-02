@@ -1,4 +1,7 @@
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -39,6 +42,10 @@ import {
 } from "./provider-oauth";
 import { MCP_TOOL_NAMES, resolveAgentDirective } from "@ai-kanban/agent-protocol";
 import type { AgentDirectiveService } from "./services/agent-directives";
+import { assertMcpWriteAuthorized, mcpRequestRequiresWriteAuth } from "./mcp/guard";
+
+const serverRoot = fileURLToPath(new URL(".", import.meta.url));
+const repoRoot = resolve(serverRoot, "../../..");
 
 const createProjectSchema = z.object({
   name: z.string().min(1),
@@ -131,6 +138,7 @@ const createPullRequestSchema = z.object({
 
 const updateInstanceSettingsSchema = z.object({
   agentPlaybook: z.string().optional(),
+  defaultProjectSlug: z.string().min(1).nullable().optional(),
 });
 
 const updateProjectContextSchema = z.object({
@@ -193,6 +201,17 @@ export function createApp(
 
   app.get("/health", (c) => c.json({ ok: true }));
 
+  app.get("/docs/agent-loop", async (c) => {
+    try {
+      const markdown = await readFile(resolve(repoRoot, "docs/agent-loop.md"), "utf8");
+      return c.text(markdown, 200, {
+        "Content-Type": "text/markdown; charset=utf-8",
+      });
+    } catch {
+      return c.text("Agent loop documentation is not available.", 404);
+    }
+  });
+
   app.get("/api/auth/config", async (c) => {
     const policy = await resolveSignupPolicy(db);
     return c.json(buildPublicAuthConfig(policy));
@@ -242,6 +261,12 @@ export function createApp(
     }
 
     const body = updateInstanceSettingsSchema.parse(await c.req.json());
+    if (body.defaultProjectSlug) {
+      const project = await tickets.resolveProject({ projectSlug: body.defaultProjectSlug });
+      if (!project) {
+        return c.json({ error: `Unknown project slug: ${body.defaultProjectSlug}` }, 400);
+      }
+    }
     const settings = await instance.updateSettings(body);
     void tickets.syncAllStoredBriefs().catch((error) => {
       console.error("Failed to refresh ticket briefs after instance settings update", error);
@@ -973,6 +998,27 @@ export function createApp(
     await mcpServer.connect(transport);
 
     const body = c.req.method === "POST" ? await c.req.json().catch(() => undefined) : undefined;
+
+    if (mcpRequestRequiresWriteAuth(body)) {
+      try {
+        assertMcpWriteAuthorized(c.req.header("Authorization"));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unauthorized";
+        const id =
+          typeof body === "object" && body !== null && "id" in body
+            ? (body as { id?: string | number }).id
+            : null;
+        return c.json(
+          {
+            jsonrpc: "2.0",
+            error: { code: -32001, message },
+            id,
+          },
+          401,
+        );
+      }
+    }
+
     await transport.handleRequest(incoming, outgoing, body);
 
     return c.body(null);

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { signOut, useSession, type SessionUser } from "@/lib/auth-client";
 import { Badge } from "@/components/ui/badge";
+import { ProjectSwitcher } from "@/components/project-switcher";
 
 type AppHeaderProps = {
   eyebrow: string;
@@ -37,6 +38,7 @@ export function AppHeader({ eyebrow, title, description, actions }: AppHeaderPro
         ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
+        <ProjectSwitcher className="mr-1" />
         {actions}
         {isPending ? (
           <span className="px-2 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">…</span>

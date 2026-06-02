@@ -32,6 +32,7 @@ export type Project = {
 export type InstanceSettings = {
   id: string;
   agentPlaybook: string;
+  defaultProjectSlug: string | null;
   signupAllowPublic: boolean;
   agentDirectiveOverrides: Record<
     string,
@@ -105,6 +106,10 @@ export type SignupPolicySettings = {
 export type McpPublicConfig = {
   mcpUrl: string;
   tools: string[];
+  multiProject: {
+    workflow: string[];
+    hint: string;
+  };
   auth: {
     type: "bearer";
     header: "Authorization";
@@ -460,7 +465,7 @@ export const api = {
       },
     ),
   getInstanceSettings: () => request<{ settings: InstanceSettings }>("/api/instance/settings"),
-  updateInstanceSettings: (input: { agentPlaybook: string }) =>
+  updateInstanceSettings: (input: { agentPlaybook?: string; defaultProjectSlug?: string | null }) =>
     request<{ settings: InstanceSettings }>("/api/instance/settings", {
       method: "PATCH",
       body: JSON.stringify(input),

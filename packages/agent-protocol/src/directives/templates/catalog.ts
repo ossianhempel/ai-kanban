@@ -17,7 +17,9 @@ import {
   listDefault,
   listFiltered,
   listReadyForPlanning,
+  listTasksProjectScoped,
 } from "./list-tasks.js";
+import { getProjectDefault } from "./get-project.js";
 import { listProjectsDefault } from "./list-projects.js";
 import {
   updateStatusAgentReady,
@@ -42,6 +44,7 @@ export const DIRECTIVE_TEMPLATE_CATALOG: Record<string, DirectiveTemplate> = reg
   listReadyForPlanning,
   listDefault,
   listFiltered,
+  listTasksProjectScoped,
   claimTaskExecution,
   addCommentClarification,
   addCommentPlanningHint,
@@ -54,6 +57,7 @@ export const DIRECTIVE_TEMPLATE_CATALOG: Record<string, DirectiveTemplate> = reg
   completeTaskNoKey,
   createTaskDefault,
   listProjectsDefault,
+  getProjectDefault,
 );
 
 export function listDirectiveTemplateIds(): string[] {
@@ -69,10 +73,12 @@ export {
   claimTaskExecution,
   createTaskDefault,
   listProjectsDefault,
+  getProjectDefault,
   listAgentReady,
   listReadyForPlanning,
   listDefault,
   listFiltered,
+  listTasksProjectScoped,
   addCommentClarification,
   addCommentPlanningHint,
   addCommentDefault,

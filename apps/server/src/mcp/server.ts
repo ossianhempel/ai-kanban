@@ -5,6 +5,7 @@ import {
   completeTaskInputSchema,
   createPullRequestInputSchema,
   createTaskInputSchema,
+  getProjectInputSchema,
   getRepositoryActivityInputSchema,
   getTaskContextInputSchema,
   linkPullRequestInputSchema,
@@ -49,11 +50,25 @@ export function createMcpServer(
       inputSchema: listTasksInputSchema,
     },
     async (input) => {
+      const project = input.projectSlug
+        ? await tickets.resolveProject({ projectSlug: input.projectSlug })
+        : await tickets.resolveProjectForAgent({});
+      if (!project) {
+        throw new Error(`Project not found: ${input.projectSlug}`);
+      }
       const rows = await tickets.listTickets({
-        projectSlug: input.projectSlug,
+        projectSlug: project.slug,
         status: input.status,
       });
-      return withDirective(MCP_TOOL_NAMES.listTasks, { filterStatus: input.status }, { tasks: rows });
+      return withDirective(
+        MCP_TOOL_NAMES.listTasks,
+        {
+          filterStatus: input.status,
+          projectSlug: project.slug,
+          projectName: project.name,
+        },
+        { tasks: rows, projectSlug: project.slug },
+      );
     },
   );
 
@@ -232,8 +247,26 @@ export function createMcpServer(
       inputSchema: listProjectsInputSchema,
     },
     async () => {
-      const projects = await tickets.listProjects();
-      return withDirective(MCP_TOOL_NAMES.listProjects, {}, { projects });
+      const payload = await tickets.listProjectsForAgent();
+      return withDirective(MCP_TOOL_NAMES.listProjects, {}, payload);
+    },
+  );
+
+  server.registerTool(
+    MCP_TOOL_NAMES.getProject,
+    {
+      title: "Get AI Kanban Project",
+      description:
+        "Load project context (name, agent context, ticket key prefix). Call after list_projects when multiple projects exist, or omit projectSlug when the instance has a default.",
+      inputSchema: getProjectInputSchema,
+    },
+    async (input) => {
+      const project = await tickets.getProjectForAgent({ projectSlug: input.projectSlug });
+      return withDirective(
+        MCP_TOOL_NAMES.getProject,
+        { projectSlug: project.slug, projectName: project.name },
+        { project },
+      );
     },
   );
 
@@ -246,17 +279,10 @@ export function createMcpServer(
       inputSchema: createTaskInputSchema,
     },
     async (input) => {
-      const project = await tickets.resolveProject({
+      const project = await tickets.resolveProjectForAgent({
         projectId: input.projectId,
         projectSlug: input.projectSlug,
       });
-      if (!project) {
-        throw new Error(
-          input.projectSlug || input.projectId
-            ? `Project not found: ${input.projectSlug ?? input.projectId}`
-            : "projectSlug or projectId is required",
-        );
-      }
 
       try {
         const ticket = await tickets.createTicket({
@@ -278,6 +304,8 @@ export function createMcpServer(
           {
             ticketKey,
             status: ticket.status,
+            projectSlug: project.slug,
+            projectName: project.name,
           },
           {
             ticket,

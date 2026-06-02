@@ -228,6 +228,29 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
     }
   }
 
+  async function handlePromoteToAgentReady() {
+    if (!context) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.updateTicket(context.ticketKey, {
+        title: context.ticket.title,
+        description: context.ticket.description,
+        acceptanceCriteria: context.ticket.acceptanceCriteria,
+        businessContext: context.ticket.businessContext,
+        expectedOutcome: context.ticket.expectedOutcome,
+        repositoryId: context.ticket.repositoryId,
+      });
+      await reloadContext();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to promote ticket");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSaveDetails() {
     if (!context) return;
     setSaving(true);
@@ -307,6 +330,11 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
     context?.ticket.status === "inbox" ||
     context?.ticket.status === "agent_ready";
 
+  const canPromoteToAgentReady =
+    context !== null &&
+    (context.ticket.status === "inbox" || context.ticket.status === "needs_clarification") &&
+    context.ticket.readinessIssues.length === 0;
+
   const canManagePullRequest =
     context?.ticket.repositoryId &&
     (context.ticket.status === "running" || context.ticket.status === "agent_ready" || !context.ticket.pullRequestUrl);
@@ -356,6 +384,17 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
                 <p className="text-[var(--color-success)]">Ticket meets readiness criteria.</p>
               </Section>
             )}
+
+            {canPromoteToAgentReady ? (
+              <div>
+                <Button size="sm" disabled={saving} onClick={() => void handlePromoteToAgentReady()}>
+                  {saving ? "Promoting…" : "Promote to Agent Ready"}
+                </Button>
+                <p className="mt-1.5 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+                  Re-evaluates intake and moves the ticket into the agent queue when readiness passes.
+                </p>
+              </div>
+            ) : null}
 
             {context.ticket.status === "agent_ready" ? (
               <div>

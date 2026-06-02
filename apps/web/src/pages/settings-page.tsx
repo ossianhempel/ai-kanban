@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { api, type KnowledgeRef, type Project, type SignupPolicySettings, type UserSummary } from "@/lib/api";
+import { api, type KnowledgeRef, type SignupPolicySettings, type UserSummary } from "@/lib/api";
 import { useSession, type SessionUser } from "@/lib/auth-client";
+import { useProjectContext } from "@/lib/project-context";
 
 function DocLinksEditor({
   title,
@@ -272,9 +273,12 @@ function SignupAccessEditor({
 export function SettingsPage() {
   const { data: session } = useSession();
   const canEdit = (session?.user as SessionUser | undefined)?.role === "admin";
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { projects, refreshProjects, setActiveProjectSlug } = useProjectContext();
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [agentPlaybook, setAgentPlaybook] = useState("");
+  const [defaultProjectSlug, setDefaultProjectSlug] = useState<string>("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectSlug, setNewProjectSlug] = useState("");
   const [projectContext, setProjectContext] = useState("");
   const [instanceRefs, setInstanceRefs] = useState<KnowledgeRef[]>([]);
   const [projectRefs, setProjectRefs] = useState<KnowledgeRef[]>([]);
@@ -304,7 +308,8 @@ export function SettingsPage() {
           api.listProjects(),
         ]);
         setAgentPlaybook(settings.agentPlaybook);
-        setProjects(nextProjects);
+        setDefaultProjectSlug(settings.defaultProjectSlug ?? "");
+        await refreshProjects();
         const projectId = nextProjects[0]?.id ?? "";
         setSelectedProjectId(projectId);
         setProjectContext(nextProjects[0]?.agentContext ?? "");
@@ -360,11 +365,54 @@ export function SettingsPage() {
     setError(null);
     setMessage(null);
     try {
-      const { project } = await api.updateProjectAgentContext(selectedProjectId, projectContext);
-      setProjects((current) => current.map((item) => (item.id === project.id ? project : item)));
+      await api.updateProjectAgentContext(selectedProjectId, projectContext);
+      await refreshProjects();
       setMessage("Project context saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save project context");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSaveDefaultProject(event: React.FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.updateInstanceSettings({
+        defaultProjectSlug: defaultProjectSlug.trim() ? defaultProjectSlug.trim() : null,
+      });
+      setMessage("Default project saved. MCP agents can omit projectSlug when only this default applies.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save default project");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateProject(event: React.FormEvent) {
+    event.preventDefault();
+    if (!newProjectName.trim() || !newProjectSlug.trim()) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { project } = await api.createProject({
+        name: newProjectName.trim(),
+        slug: newProjectSlug.trim().toLowerCase(),
+      });
+      setNewProjectName("");
+      setNewProjectSlug("");
+      await refreshProjects();
+      setSelectedProjectId(project.id);
+      setActiveProjectSlug(project.slug);
+      setMessage(`Project “${project.name}” created.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create project");
     } finally {
       setSaving(false);
     }
@@ -411,6 +459,75 @@ export function SettingsPage() {
       ) : null}
 
       <AgentIntegrationCard />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Projects</CardTitle>
+          <CardDescription>
+            Multiple boards per instance. The header switcher picks your UI project; the default below is used when MCP
+            omits <code className="text-[length:var(--text-xs)]">projectSlug</code>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {projects.length > 0 ? (
+            <ul className="space-y-1 text-[length:var(--text-sm)] text-[var(--color-text-default)]">
+              {projects.map((project) => (
+                <li key={project.id}>
+                  <span className="font-medium text-[var(--color-text-strong)]">{project.name}</span>{" "}
+                  <span className="font-mono text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+                    {project.slug}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">No projects yet.</p>
+          )}
+
+          {canEdit ? (
+            <>
+              <form className="flex flex-wrap items-end gap-2" onSubmit={handleSaveDefaultProject}>
+                <div className="min-w-[12rem] flex-1">
+                  <label className="mb-1 block text-[length:var(--text-xs)] font-medium text-[var(--color-text-subtle)]">
+                    Default for MCP (optional)
+                  </label>
+                  <Select
+                    value={defaultProjectSlug}
+                    onChange={(event) => setDefaultProjectSlug(event.target.value)}
+                  >
+                    <option value="">None — agents must pass projectSlug</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.slug}>
+                        {project.name} ({project.slug})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button type="submit" size="sm" disabled={saving}>
+                  {saving ? "Saving…" : "Save default"}
+                </Button>
+              </form>
+
+              <form className="grid gap-2 md:grid-cols-[1fr_1fr_auto]" onSubmit={handleCreateProject}>
+                <Input
+                  placeholder="Project name"
+                  value={newProjectName}
+                  onChange={(event) => setNewProjectName(event.target.value)}
+                />
+                <Input
+                  placeholder="slug (e.g. platform)"
+                  value={newProjectSlug}
+                  onChange={(event) => setNewProjectSlug(event.target.value)}
+                />
+                <Button type="submit" size="sm" disabled={saving || !newProjectName.trim() || !newProjectSlug.trim()}>
+                  <Icon icon={IconPlusOutline18} size={16} stroke="fine" />
+                  Add project
+                </Button>
+              </form>
+            </>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <AgentDirectivesEditor
         canEdit={canEdit}

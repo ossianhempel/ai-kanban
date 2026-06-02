@@ -2,7 +2,9 @@
 
 Deploy AI Kanban on an **Azure Linux VM** with Docker Compose and Caddy for HTTPS.
 
-**New operator?** Start with the generic guide first: **[Install from source](./installation-from-source.md)** (clone, `.env`, update script). This doc adds Azure-specific steps (VM size, NSG, DNS).
+**Fastest path:** **[Azure quickstart](./azure-quickstart.md)** — one `bootstrap-install.sh`, Docker stack with HTTPS (~20 min).
+
+**Manual / advanced:** This doc (paths A/B, host Caddy, backup). Generic clone guide: **[Install from source](./installation-from-source.md)**.
 
 ## Why a VM (not Container Apps / App Service)
 

@@ -20,6 +20,7 @@ import {
   type Repository,
   type SourceProviderId,
 } from "@/lib/api";
+import { useProjectContext } from "@/lib/project-context";
 
 const checkLabels: Record<string, string> = {
   readme: "README",
@@ -47,6 +48,7 @@ function providerLabel(provider: SourceProviderId | null) {
 }
 
 export function RepositoriesPage() {
+  const { activeProject } = useProjectContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
@@ -114,6 +116,12 @@ export function RepositoriesPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (activeProject && activeProject.id !== selectedProjectId) {
+      setSelectedProjectId(activeProject.id);
+    }
+  }, [activeProject?.id]);
 
   useEffect(() => {
     void refresh(selectedProjectId || undefined);

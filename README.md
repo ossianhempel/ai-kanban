@@ -2,7 +2,7 @@
 
 Open-source, self-hostable AI-native Kanban platform — the control plane between humans, knowledge sources, repositories, and AI agents.
 
-**Setup & usage (humans + agents):** [AGENTS.md](./AGENTS.md)
+**Setup & usage (humans + agents):** [AGENTS.md](./AGENTS.md) · **Agent loop (MCP):** [docs/agent-loop.md](./docs/agent-loop.md)
 
 ## Stack
 

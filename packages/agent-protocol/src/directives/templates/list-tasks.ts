@@ -35,6 +35,18 @@ export const listDefault: DirectiveTemplate = {
   body: "Call `{{tools.getTaskContext}}` before acting on any ticket.",
 };
 
+export const listTasksProjectScoped: DirectiveTemplate = {
+  id: "list_tasks.project_scoped",
+  phase: "list_default",
+  priority: "recommended",
+  title: "Tickets in project {{projectSlug}}",
+  body: [
+    "Results are scoped to project **{{projectSlug}}** only.",
+    "",
+    "Call `{{tools.getTaskContext}}` before acting on any ticket. Keep `projectSlug` on subsequent list/create calls.",
+  ].join("\n"),
+};
+
 export const listFiltered: DirectiveTemplate = {
   id: "list_tasks.filtered",
   phase: "list_default",

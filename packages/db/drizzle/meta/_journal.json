@@ -43,6 +43,13 @@
       "when": 1780455904958,
       "tag": "0005_agent_directive_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1780555904958,
+      "tag": "0006_instance_default_project",
+      "breakpoints": true
     }
   ]
 }
