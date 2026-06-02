@@ -16,3 +16,15 @@ export const iconStroke = {
   fine: 0.8,
   default: 1,
 } as const;
+
+export const motion = {
+  duration: {
+    fast: "var(--motion-duration-fast)",
+    normal: "var(--motion-duration-normal)",
+    slow: "var(--motion-duration-slow)",
+  },
+  ease: {
+    out: "var(--motion-ease-out)",
+    inOut: "var(--motion-ease-in-out)",
+  },
+} as const;

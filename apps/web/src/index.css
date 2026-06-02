@@ -27,6 +27,13 @@
   --color-success: #6ee7a0;
   --color-warning: #e5b567;
   --color-danger: #e57373;
+
+  /* Motion — shared across motion components and UI controls */
+  --motion-duration-fast: 150ms;
+  --motion-duration-normal: 220ms;
+  --motion-duration-slow: 320ms;
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
 }
 
 * {
@@ -79,4 +86,127 @@ button {
 
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* --- Reusable motion presets (see apps/web/src/lib/motion.ts) --- */
+
+.motion-overlay {
+  opacity: 0;
+  transition: opacity var(--motion-duration-normal) var(--motion-ease-out);
+}
+
+.motion-overlay[data-phase="idle"] {
+  opacity: 1;
+}
+
+.motion-slide-panel {
+  transition: transform var(--motion-duration-normal) var(--motion-ease-out);
+  will-change: transform;
+}
+
+.motion-slide-panel[data-side="right"] {
+  transform: translateX(100%);
+}
+
+.motion-slide-panel[data-side="left"] {
+  transform: translateX(-100%);
+}
+
+.motion-slide-panel[data-phase="idle"] {
+  transform: translateX(0);
+}
+
+.motion-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--motion-duration-normal) var(--motion-ease-out),
+    opacity var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.motion-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.motion-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.motion-fade-in {
+  animation: motion-fade-in var(--motion-duration-normal) var(--motion-ease-out) both;
+}
+
+.motion-fade-in-up {
+  animation: motion-fade-in-up var(--motion-duration-normal) var(--motion-ease-out) both;
+}
+
+.motion-field {
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-out),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.motion-pressable {
+  transition:
+    background-color var(--motion-duration-fast) var(--motion-ease-out),
+    color var(--motion-duration-fast) var(--motion-ease-out),
+    transform var(--motion-duration-fast) var(--motion-ease-out),
+    opacity var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.motion-pressable:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.motion-surface {
+  transition: background-color var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+@keyframes motion-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes motion-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-overlay,
+  .motion-slide-panel,
+  .motion-collapse,
+  .motion-field,
+  .motion-pressable,
+  .motion-surface {
+    transition: none;
+  }
+
+  .motion-fade-in,
+  .motion-fade-in-up {
+    animation: none;
+  }
+
+  .motion-pressable:active:not(:disabled) {
+    transform: none;
+  }
+
+  .motion-overlay[data-phase="enter"],
+  .motion-slide-panel[data-phase="enter"] {
+    opacity: 1;
+    transform: none;
+  }
 }
