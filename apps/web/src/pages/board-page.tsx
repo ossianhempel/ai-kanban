@@ -67,9 +67,11 @@ export function BoardPage() {
     return project;
   }
 
-  async function handleCreateTicket(event: React.FormEvent) {
-    event.preventDefault();
-    if (!canSubmitIntake) {
+  async function handleCreateTicket(intakeMode: "inbox" | "strict") {
+    if (intakeMode === "strict" && !canSubmitStrictIntake) {
+      return;
+    }
+    if (intakeMode === "inbox" && !title.trim()) {
       return;
     }
 
@@ -84,6 +86,7 @@ export function BoardPage() {
         businessContext: businessContext.trim(),
         expectedOutcome: expectedOutcome.trim(),
         repositoryId: repositoryId || null,
+        intakeMode,
       });
       setTitle("");
       setDescription("");
@@ -133,7 +136,15 @@ export function BoardPage() {
     [title, description, acceptanceCriteria, businessContext, expectedOutcome, repositoryId],
   );
 
-  const canSubmitIntake = intakeReadiness.issues.length === 0;
+  const canSubmitStrictIntake = intakeReadiness.issues.length === 0;
+  const canSubmitInbox = title.trim().length > 0;
+  const intakeStarted =
+    Boolean(title.trim()) ||
+    Boolean(description.trim()) ||
+    Boolean(acceptanceCriteria.trim()) ||
+    Boolean(businessContext.trim()) ||
+    Boolean(expectedOutcome.trim()) ||
+    Boolean(repositoryId);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col gap-5 px-5 py-6">
@@ -162,7 +173,7 @@ export function BoardPage() {
         <CardHeader>
           <CardTitle>Intake</CardTitle>
           <CardDescription>
-            Fill every field and link a repository. Team-wide agent context (repo map, shared docs) lives in{" "}
+            Add a rough idea to Inbox, or fill every field to land directly in Agent Ready. Team-wide context lives in{" "}
             <Link to="/settings" className="text-[var(--color-text-strong)] underline-offset-2 hover:underline">
               Agent settings
             </Link>
@@ -170,7 +181,13 @@ export function BoardPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-2.5 md:grid-cols-2" onSubmit={handleCreateTicket}>
+          <form
+            className="grid gap-2.5 md:grid-cols-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleCreateTicket("strict");
+            }}
+          >
             <Select
               className="md:col-span-2"
               value={selectedProject}
@@ -217,7 +234,9 @@ export function BoardPage() {
               onChange={(event) => setRepositoryId(event.target.value)}
             >
               <option value="">
-                {projectRepositories.length === 0 ? "Add a repository first (required)" : "Select repository (required)"}
+                {projectRepositories.length === 0
+                  ? "Add a repository first (required for Agent Ready)"
+                  : "Select repository (required for Agent Ready)"}
               </option>
               {projectRepositories.map((repo) => (
                 <option key={repo.id} value={repo.id}>
@@ -227,7 +246,7 @@ export function BoardPage() {
             </Select>
             {projectRepositories.length === 0 ? (
               <p className="md:col-span-2 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
-                Intake requires a linked repository.{" "}
+                Agent Ready intake requires a linked repository. Inbox accepts a title-only draft.{" "}
                 <Link to="/repositories" className="text-[var(--color-text-strong)] underline-offset-2 hover:underline">
                   Add one on Repositories
                 </Link>{" "}
@@ -235,15 +254,27 @@ export function BoardPage() {
               </p>
             ) : null}
             <div className="md:col-span-2 space-y-2">
-              {!canSubmitIntake ? (
-                <p className="text-[length:var(--text-xs)] text-[var(--color-warning)]">
-                  Still needed: {intakeReadiness.issues.join(" · ")}
+              {intakeStarted && !canSubmitStrictIntake ? (
+                <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+                  For Agent Ready: {intakeReadiness.issues.join(" · ")}
                 </p>
               ) : null}
-              <Button type="submit" size="sm" disabled={!canSubmitIntake}>
-                <Icon icon={IconPlusOutline18} size={16} stroke="fine" />
-                Add to Agent Ready
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!canSubmitInbox}
+                  onClick={() => void handleCreateTicket("inbox")}
+                >
+                  <Icon icon={IconPlusOutline18} size={16} stroke="fine" />
+                  Add to Inbox
+                </Button>
+                <Button type="submit" size="sm" disabled={!canSubmitStrictIntake}>
+                  <Icon icon={IconPlusOutline18} size={16} stroke="fine" />
+                  Add to Agent Ready
+                </Button>
+              </div>
             </div>
           </form>
         </CardContent>

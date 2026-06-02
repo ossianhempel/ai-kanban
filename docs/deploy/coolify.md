@@ -78,9 +78,19 @@ For production / Microsoft SSO, use a real domain with trusted HTTPS.
 ## After deploy
 
 1. Open the URL → sign up (first user becomes **admin**).
-2. **Settings** → configure instance agent guide and member roles.
-3. Set `AIKANBAN_API_TOKEN` for headless CLI/MCP access.
-4. Redeploy after env changes.
+2. **Settings** → **Agent integration (MCP)** — copy Claude Desktop or Cursor config (uses `WEB_ORIGIN/mcp`).
+3. Set `AIKANBAN_API_TOKEN` for headless CLI/MCP access; paste the real token into your client config.
+4. Smoke test: `AIKANBAN_MCP_URL=https://your-host/mcp node scripts/mcp-smoke.mjs --call`
+5. Redeploy after env changes.
+
+### Claude Desktop (hosted MCP)
+
+1. Settings → Agent integration → **Copy config** (Claude Desktop).
+2. Edit `~/Library/Application Support/Claude/claude_desktop_config.json` — merge under `mcpServers`.
+3. Replace `YOUR_AIKANBAN_API_TOKEN` with the Coolify env value (if set).
+4. Restart Claude Desktop → ask: *“Call aikanban_list_tasks on ai-kanban”*.
+
+Public install metadata (no login): `GET /api/mcp/config`
 
 ## Update
 

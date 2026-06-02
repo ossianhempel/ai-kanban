@@ -165,19 +165,24 @@ Ticket matched by: linked PR → branch name → ticket key in PR title/body (e.
 
 ### Typical loop
 
-1. `aikanban_list_tasks` — find `agent_ready` work
-2. `aikanban_get_task_context` — full brief (instance guide, project context, docs, repo path, acceptance criteria, test commands)
-3. `aikanban_claim_task` — status → `running`
-4. Do the work in the linked repo
-5. `aikanban_create_pull_request` or `aikanban_link_pull_request`
-6. `aikanban_update_task_status` / `aikanban_complete_task` as needed
+1. `aikanban_list_projects` — project slugs for create
+2. `aikanban_list_tasks` — find `agent_ready` work (includes workflow hint)
+3. `aikanban_create_task` — spawn inbox drafts or strict agent-ready tickets
+4. `aikanban_get_task_context` — full brief **plus mandatory status directive** (e.g. pre-execution review before claim)
+5. If context insufficient → `aikanban_add_ticket_comment` (kind `clarification_request`) + `aikanban_update_task_status` → `needs_clarification`
+6. If sufficient → `aikanban_claim_task` — status → `running`
+7. Do the work in the linked repo
+8. `aikanban_create_pull_request` or `aikanban_link_pull_request`
+9. `aikanban_update_task_status` / `aikanban_complete_task` as needed
 
 Webhooks move tickets when PRs change state (if configured).
 
 ### MCP
 
 - **Endpoint:** `POST https://<host>/mcp` (dev: proxied via Vite at `:5180/mcp`, or direct API port)
-- **Tools:** `aikanban_list_tasks`, `aikanban_claim_task`, `aikanban_get_task_context`, `aikanban_update_task_status`, `aikanban_complete_task`, `aikanban_link_pull_request`, `aikanban_create_pull_request`, `aikanban_get_repository_activity`
+- **Tools:** `aikanban_list_projects`, `aikanban_list_tasks`, `aikanban_create_task`, `aikanban_claim_task`, `aikanban_get_task_context`, `aikanban_update_task_status`, `aikanban_complete_task`, `aikanban_link_pull_request`, `aikanban_create_pull_request`, `aikanban_get_repository_activity`, `aikanban_add_ticket_comment`
+
+MCP tool responses include an **`agentDirective`** block (markdown + JSON) keyed to ticket status — e.g. **Agent Ready** tickets require a pre-execution review before `claim_task`.
 
 Configure in Cursor / Claude Desktop / other MCP clients pointing at your instance URL.
 
@@ -231,6 +236,8 @@ packages/integrations/   GitHub, Azure DevOps adapters; GitLab stubbed
 **Readiness:** `packages/agent-protocol/src/readiness.ts` — intake must pass before create.
 
 **Claim guard:** only `agent_ready` → `running` via claim.
+
+**Agent directives:** built-in prompts in `packages/agent-protocol/src/directives/templates/`; instance admins can override via **Settings → Agent workflow prompts** (stored in `instance_settings.agent_directive_overrides`).
 
 **Auth:** Better Auth at `/api/auth/*`; session cookie for web; `AIKANBAN_API_TOKEN` Bearer acts as first admin for CLI/MCP when set.
 

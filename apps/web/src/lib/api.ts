@@ -32,6 +32,98 @@ export type Project = {
 export type InstanceSettings = {
   id: string;
   agentPlaybook: string;
+  signupAllowPublic: boolean;
+  agentDirectiveOverrides: Record<
+    string,
+    {
+      title?: string;
+      body?: string;
+      priority?: "mandatory" | "recommended";
+    }
+  >;
+};
+
+export type AgentDirectiveTemplateView = {
+  id: string;
+  phase: string;
+  group: string;
+  default: {
+    title: string;
+    body: string;
+    priority: "mandatory" | "recommended";
+  };
+  override: {
+    title?: string;
+    body?: string;
+    priority?: "mandatory" | "recommended";
+  } | null;
+  effective: {
+    title: string;
+    body: string;
+    priority: "mandatory" | "recommended";
+  };
+  isCustomized: boolean;
+};
+
+export type TicketComment = {
+  id: string;
+  ticketId: string;
+  authorId: string | null;
+  body: string;
+  kind: "comment" | "agent_comment" | "clarification_request";
+  createdAt: string;
+};
+
+export type AgentDirective = {
+  phase: string;
+  priority: "mandatory" | "recommended";
+  title: string;
+  instructions: string;
+  templateId?: string;
+  allowedNextTools?: string[];
+  blockedUntilComplete?: string[];
+};
+
+export type SignupAllowlistEntry = {
+  id: string;
+  kind: "email" | "domain";
+  value: string;
+  createdAt: string;
+};
+
+export type SignupPolicySettings = {
+  policy: SignupPolicy;
+  allowPublicSignup: boolean;
+  allowlist: SignupAllowlistEntry[];
+  envFallback: {
+    allowPublicSignup: boolean;
+    allowedEmails: string[];
+    allowedDomains: string[];
+  };
+};
+
+export type McpPublicConfig = {
+  mcpUrl: string;
+  tools: string[];
+  auth: {
+    type: "bearer";
+    header: "Authorization";
+    envVar: "AIKANBAN_API_TOKEN";
+    configured: boolean;
+    required: boolean;
+  };
+  clients: {
+    cursor: Record<string, unknown>;
+    claudeDesktop: Record<string, unknown>;
+  };
+};
+
+export type AgentIntegrationInfo = {
+  mcpUrl: string;
+  apiTokenConfigured: boolean;
+  tools: string[];
+  isAdmin: boolean;
+  clients: McpPublicConfig["clients"];
 };
 
 export type SignupPolicy = {
@@ -173,6 +265,8 @@ export type TicketContext = {
   repository: Omit<Repository, "project"> | null;
   ticketKey: string;
   brief: AgentBrief;
+  comments: TicketComment[];
+  agentDirective: AgentDirective | null;
 };
 
 const baseUrl = "";
@@ -217,6 +311,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getAuthConfig: () => request<AuthConfig>("/api/auth/config"),
+  getAgentIntegration: () => request<AgentIntegrationInfo>("/api/agent/integration"),
+  getMcpConfig: () => request<{ config: McpPublicConfig }>("/api/mcp/config"),
   listProjects: () => request<{ projects: Project[] }>("/api/projects"),
   createProject: (input: { name: string; slug: string; description?: string }) =>
     request<{ project: Project }>("/api/projects", {
@@ -239,6 +335,7 @@ export const api = {
     businessContext?: string;
     expectedOutcome?: string;
     repositoryId?: string | null;
+    intakeMode?: "inbox" | "strict";
   }) =>
     request<{ ticket: Ticket }>("/api/tickets", {
       method: "POST",
@@ -307,6 +404,8 @@ export const api = {
       { method: "POST" },
     ),
   listProviders: () => request<{ providers: ProviderInfo[] }>("/api/providers"),
+  getConnectionOAuthConfig: () =>
+    request<{ oauth: { github: boolean; azure_devops: boolean } }>("/api/connections/oauth/config"),
   listConnections: () => request<{ connections: ProviderConnection[] }>("/api/connections"),
   connectProvider: (input: {
     provider: SourceProviderId;
@@ -366,6 +465,51 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(input),
     }),
+  listAgentDirectiveTemplates: () =>
+    request<{ templates: AgentDirectiveTemplateView[] }>("/api/instance/agent-directives"),
+  updateAgentDirectiveTemplate: (
+    templateId: string,
+    input: { title?: string; body?: string; priority?: "mandatory" | "recommended" },
+  ) =>
+    request<{ template: AgentDirectiveTemplateView }>(
+      `/api/instance/agent-directives/${encodeURIComponent(templateId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    ),
+  resetAgentDirectiveTemplate: (templateId: string) =>
+    request<{ template: AgentDirectiveTemplateView }>(
+      `/api/instance/agent-directives/${encodeURIComponent(templateId)}`,
+      { method: "DELETE" },
+    ),
+  addTicketComment: (
+    ref: string,
+    input: { body: string; kind?: TicketComment["kind"] },
+  ) =>
+    request<{ ticket: Ticket; comment: TicketComment }>(
+      `/api/tickets/${encodeURIComponent(ref)}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify(input),
+      },
+    ),
+  getSignupPolicySettings: () => request<SignupPolicySettings>("/api/instance/signup-policy"),
+  updateSignupPolicy: (input: { allowPublicSignup: boolean }) =>
+    request<SignupPolicySettings>("/api/instance/signup-policy", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  addSignupAllowlistEntry: (input: { kind: "email" | "domain"; value: string }) =>
+    request<SignupPolicySettings & { entry: SignupAllowlistEntry }>("/api/instance/signup-allowlist", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  removeSignupAllowlistEntry: (id: string) =>
+    request<SignupPolicySettings & { entry: SignupAllowlistEntry }>(
+      `/api/instance/signup-allowlist/${encodeURIComponent(id)}`,
+      { method: "DELETE" },
+    ),
   listUsers: () => request<{ users: UserSummary[] }>("/api/users"),
   updateUserRole: (userId: string, role: "admin" | "member") =>
     request<{ user: UserSummary }>(`/api/users/${encodeURIComponent(userId)}/role`, {

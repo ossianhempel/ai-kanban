@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { IconArrowDoorInOutline18, IconPlusOutline18, IconTrashOutline18 } from "nucleo-ui-essential-outline-18";
 import { AppHeader } from "@/components/app-header";
+import { AgentDirectivesEditor } from "@/components/agent-directives-editor";
+import { AgentIntegrationCard } from "@/components/agent-integration-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import { api, type KnowledgeRef, type Project, type UserSummary } from "@/lib/api";
+import { api, type KnowledgeRef, type Project, type SignupPolicySettings, type UserSummary } from "@/lib/api";
 import { useSession, type SessionUser } from "@/lib/auth-client";
 
 function DocLinksEditor({
@@ -119,6 +121,154 @@ function DocLinksEditor({
   );
 }
 
+function SignupAccessEditor({
+  settings,
+  onChanged,
+  saving,
+  setSaving,
+  setError,
+  setMessage,
+}: {
+  settings: SignupPolicySettings;
+  onChanged: () => void;
+  saving: boolean;
+  setSaving: (value: boolean) => void;
+  setError: (value: string | null) => void;
+  setMessage: (value: string | null) => void;
+}) {
+  const [allowlistKind, setAllowlistKind] = useState<"email" | "domain">("email");
+  const [allowlistValue, setAllowlistValue] = useState("");
+
+  async function handleTogglePublicSignup(allowPublicSignup: boolean) {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.updateSignupPolicy({ allowPublicSignup });
+      onChanged();
+      setMessage(allowPublicSignup ? "Open sign-up enabled." : "Open sign-up disabled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update sign-up policy");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddAllowlist(event: React.FormEvent) {
+    event.preventDefault();
+    if (!allowlistValue.trim()) return;
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.addSignupAllowlistEntry({ kind: allowlistKind, value: allowlistValue.trim() });
+      setAllowlistValue("");
+      onChanged();
+      setMessage("Allowlist entry added.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add allowlist entry");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemoveAllowlist(id: string) {
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.removeSignupAllowlistEntry(id);
+      onChanged();
+      setMessage("Allowlist entry removed.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove allowlist entry");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const envEmails = settings.envFallback.allowedEmails;
+  const envDomains = settings.envFallback.allowedDomains;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Sign-up access</CardTitle>
+        <CardDescription>
+          Control who can create accounts. Applies to email/password and SSO first-time sign-in. Current mode:{" "}
+          <strong>{settings.policy.mode}</strong>.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {settings.policy.hint ? (
+          <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">{settings.policy.hint}</p>
+        ) : null}
+
+        <label className="flex items-center gap-2 text-[length:var(--text-sm)] text-[var(--color-text-default)]">
+          <input
+            type="checkbox"
+            checked={settings.allowPublicSignup}
+            disabled={saving}
+            onChange={(event) => void handleTogglePublicSignup(event.target.checked)}
+          />
+          Allow anyone to sign up (open registration)
+        </label>
+
+        <div className="space-y-2">
+          <p className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-strong)]">Allowlist</p>
+          <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+            When open sign-up is off, only these emails or domains can join. Env vars still apply as a fallback.
+          </p>
+          {settings.allowlist.length > 0 ? (
+            <ul className="space-y-2">
+              {settings.allowlist.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center justify-between gap-2 rounded-md border border-[var(--color-border)] px-3 py-2"
+                >
+                  <div>
+                    <p className="text-[length:var(--text-sm)] text-[var(--color-text-strong)]">{entry.value}</p>
+                    <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">{entry.kind}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" disabled={saving} onClick={() => void handleRemoveAllowlist(entry.id)}>
+                    <Icon icon={IconTrashOutline18} size={16} stroke="fine" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">No allowlist entries yet.</p>
+          )}
+
+          {(envEmails.length > 0 || envDomains.length > 0) && (
+            <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+              Also allowed via server env:{" "}
+              {[...envEmails, ...envDomains.map((domain) => `@${domain}`)].join(", ")}
+            </p>
+          )}
+
+          <form className="flex flex-wrap items-end gap-2" onSubmit={handleAddAllowlist}>
+            <Select value={allowlistKind} onChange={(event) => setAllowlistKind(event.target.value as "email" | "domain")}>
+              <option value="email">Email</option>
+              <option value="domain">Domain</option>
+            </Select>
+            <Input
+              className="min-w-[220px] flex-1"
+              placeholder={allowlistKind === "email" ? "colleague@company.com" : "company.com"}
+              value={allowlistValue}
+              onChange={(event) => setAllowlistValue(event.target.value)}
+            />
+            <Button type="submit" size="sm" disabled={saving || !allowlistValue.trim()}>
+              <Icon icon={IconPlusOutline18} size={16} stroke="fine" />
+              Add
+            </Button>
+          </form>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function SettingsPage() {
   const { data: session } = useSession();
   const canEdit = (session?.user as SessionUser | undefined)?.role === "admin";
@@ -129,6 +279,7 @@ export function SettingsPage() {
   const [instanceRefs, setInstanceRefs] = useState<KnowledgeRef[]>([]);
   const [projectRefs, setProjectRefs] = useState<KnowledgeRef[]>([]);
   const [members, setMembers] = useState<UserSummary[]>([]);
+  const [signupPolicy, setSignupPolicy] = useState<SignupPolicySettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,10 +322,12 @@ export function SettingsPage() {
   useEffect(() => {
     if (!canEdit) {
       setMembers([]);
+      setSignupPolicy(null);
       return;
     }
 
     void api.listUsers().then(({ users }) => setMembers(users)).catch(() => setMembers([]));
+    void api.getSignupPolicySettings().then(setSignupPolicy).catch(() => setSignupPolicy(null));
   }, [canEdit]);
 
   useEffect(() => {
@@ -237,7 +390,7 @@ export function SettingsPage() {
       <AppHeader
         eyebrow="Team context"
         title="Agent settings"
-        description="Shared guides and doc links injected into every agent brief on this instance."
+        description="Team context for briefs, sign-up access, member roles, and MCP connection details for your agents."
         actions={
           <Link to="/">
             <Button variant="secondary" size="sm">
@@ -256,6 +409,16 @@ export function SettingsPage() {
           View only — instance admins can edit team context. The first account on this installation is admin.
         </p>
       ) : null}
+
+      <AgentIntegrationCard />
+
+      <AgentDirectivesEditor
+        canEdit={canEdit}
+        saving={saving}
+        setSaving={setSaving}
+        setError={setError}
+        setMessage={setMessage}
+      />
 
       <Card>
         <CardHeader>
@@ -330,6 +493,19 @@ export function SettingsPage() {
           refs={projectRefs}
           onChanged={() => void refreshRefs(selectedProjectId)}
           readOnly={!canEdit}
+        />
+      ) : null}
+
+      {canEdit && signupPolicy ? (
+        <SignupAccessEditor
+          settings={signupPolicy}
+          saving={saving}
+          setSaving={setSaving}
+          setError={setError}
+          setMessage={setMessage}
+          onChanged={() => {
+            void api.getSignupPolicySettings().then(setSignupPolicy).catch(() => setSignupPolicy(null));
+          }}
         />
       ) : null}
 

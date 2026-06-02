@@ -1,31 +1,45 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  addTicketCommentInputSchema,
   claimTaskInputSchema,
   completeTaskInputSchema,
   createPullRequestInputSchema,
+  createTaskInputSchema,
   getRepositoryActivityInputSchema,
   getTaskContextInputSchema,
   linkPullRequestInputSchema,
+  listProjectsInputSchema,
   listTasksInputSchema,
   MCP_TOOL_NAMES,
+  resolveAgentDirective,
   ticketStatusSchema,
   updateTaskStatusInputSchema,
 } from "@ai-kanban/agent-protocol";
+import { IntakeValidationError, formatTicketKey } from "@ai-kanban/core";
 import type { RepositoryService } from "../services/repositories";
+import type { AgentDirectiveService } from "../services/agent-directives";
 import type { TicketService } from "../services/tickets";
+import { buildMcpToolResult } from "./tool-result";
 
-function toolResult<T>(payload: T) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(payload, null, 2) }],
-    structuredContent: payload,
-  };
-}
-
-export function createMcpServer(tickets: TicketService, repos: RepositoryService) {
+export function createMcpServer(
+  tickets: TicketService,
+  repos: RepositoryService,
+  agentDirectives: AgentDirectiveService,
+) {
   const server = new McpServer({
     name: "ai-kanban-mcp-server",
     version: "0.1.0",
   });
+
+  async function withDirective<T extends Record<string, unknown>>(
+    tool: (typeof MCP_TOOL_NAMES)[keyof typeof MCP_TOOL_NAMES],
+    context: Parameters<typeof resolveAgentDirective>[1],
+    payload: T,
+  ) {
+    const templateOverrides = await agentDirectives.getOverrides();
+    const directive = resolveAgentDirective(tool, context, { templateOverrides });
+    return buildMcpToolResult(payload, directive);
+  }
 
   server.registerTool(
     MCP_TOOL_NAMES.listTasks,
@@ -39,7 +53,7 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
         projectSlug: input.projectSlug,
         status: input.status,
       });
-      return toolResult({ tasks: rows });
+      return withDirective(MCP_TOOL_NAMES.listTasks, { filterStatus: input.status }, { tasks: rows });
     },
   );
 
@@ -55,7 +69,8 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
       if (!ticket) {
         throw new Error(`Task not found: ${input.taskRef}`);
       }
-      return toolResult({ ticket });
+      const context = await tickets.getTicketContext(input.taskRef);
+      return withDirective(MCP_TOOL_NAMES.claimTask, { ticketKey: context?.ticketKey }, { ticket });
     },
   );
 
@@ -63,7 +78,7 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
     MCP_TOOL_NAMES.getTaskContext,
     {
       title: "Get AI Kanban Task Context",
-      description: "Get full task context including agent brief.",
+      description: "Get full task context including agent brief and workflow directive for the ticket status.",
       inputSchema: getTaskContextInputSchema,
     },
     async (input) => {
@@ -71,7 +86,16 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
       if (!context) {
         throw new Error(`Task not found: ${input.taskRef}`);
       }
-      return toolResult(context);
+      const templateOverrides = await agentDirectives.getOverrides();
+      const directive = resolveAgentDirective(
+        MCP_TOOL_NAMES.getTaskContext,
+        {
+          ticketKey: context.ticketKey,
+          status: context.ticket.status,
+        },
+        { templateOverrides },
+      );
+      return buildMcpToolResult(context, directive);
     },
   );
 
@@ -84,11 +108,16 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
     },
     async (input) => {
       const status = ticketStatusSchema.parse(input.status);
+      const before = await tickets.getTicketContext(input.taskRef);
       const ticket = await tickets.updateTicketStatus(input.taskRef, status);
       if (!ticket) {
         throw new Error(`Task not found: ${input.taskRef}`);
       }
-      return toolResult({ ticket });
+      return withDirective(
+        MCP_TOOL_NAMES.updateTaskStatus,
+        { ticketKey: before?.ticketKey, nextStatus: status },
+        { ticket },
+      );
     },
   );
 
@@ -100,11 +129,12 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
       inputSchema: completeTaskInputSchema,
     },
     async (input) => {
+      const before = await tickets.getTicketContext(input.taskRef);
       const ticket = await tickets.completeTicket(input.taskRef, input.summary);
       if (!ticket) {
         throw new Error(`Task not found: ${input.taskRef}`);
       }
-      return toolResult({ ticket });
+      return withDirective(MCP_TOOL_NAMES.completeTask, { ticketKey: before?.ticketKey }, { ticket });
     },
   );
 
@@ -123,7 +153,7 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
       if (!ticket) {
         throw new Error(`Task not found: ${input.taskRef}`);
       }
-      return toolResult({ ticket });
+      return buildMcpToolResult({ ticket }, null);
     },
   );
 
@@ -145,7 +175,7 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
       if (!result?.ticket) {
         throw new Error(`Task not found: ${input.taskRef}`);
       }
-      return toolResult(result);
+      return buildMcpToolResult(result, null);
     },
   );
 
@@ -161,7 +191,107 @@ export function createMcpServer(tickets: TicketService, repos: RepositoryService
       if (!activity) {
         throw new Error(`Repository not found or not connected: ${input.repositoryId}`);
       }
-      return toolResult({ activity });
+      return buildMcpToolResult({ activity }, null);
+    },
+  );
+
+  server.registerTool(
+    MCP_TOOL_NAMES.addTicketComment,
+    {
+      title: "Add Ticket Comment",
+      description: "Add a comment to a ticket. Use kind clarification_request when asking the human author for missing information.",
+      inputSchema: addTicketCommentInputSchema,
+    },
+    async (input) => {
+      const before = await tickets.getTicketContext(input.taskRef);
+      const result = await tickets.addTicketComment(input.taskRef, {
+        body: input.body,
+        agentId: input.agentId,
+        kind: input.kind,
+      });
+      if (!result) {
+        throw new Error(`Task not found: ${input.taskRef}`);
+      }
+      return withDirective(
+        MCP_TOOL_NAMES.addTicketComment,
+        {
+          commentKind: input.kind,
+          status: before?.ticket.status,
+          ticketKey: before?.ticketKey,
+        },
+        result,
+      );
+    },
+  );
+
+  server.registerTool(
+    MCP_TOOL_NAMES.listProjects,
+    {
+      title: "List AI Kanban Projects",
+      description: "List projects on this instance. Use project slug when creating tickets.",
+      inputSchema: listProjectsInputSchema,
+    },
+    async () => {
+      const projects = await tickets.listProjects();
+      return withDirective(MCP_TOOL_NAMES.listProjects, {}, { projects });
+    },
+  );
+
+  server.registerTool(
+    MCP_TOOL_NAMES.createTask,
+    {
+      title: "Create AI Kanban Task",
+      description:
+        "Create a new ticket. Use intakeMode inbox for drafts; strict requires full intake fields and lands in agent_ready or needs_clarification.",
+      inputSchema: createTaskInputSchema,
+    },
+    async (input) => {
+      const project = await tickets.resolveProject({
+        projectId: input.projectId,
+        projectSlug: input.projectSlug,
+      });
+      if (!project) {
+        throw new Error(
+          input.projectSlug || input.projectId
+            ? `Project not found: ${input.projectSlug ?? input.projectId}`
+            : "projectSlug or projectId is required",
+        );
+      }
+
+      try {
+        const ticket = await tickets.createTicket({
+          projectId: project.id,
+          title: input.title,
+          description: input.description,
+          acceptanceCriteria: input.acceptanceCriteria,
+          businessContext: input.businessContext,
+          expectedOutcome: input.expectedOutcome,
+          priority: input.priority,
+          repositoryId: input.repositoryId ?? null,
+          intakeMode: input.intakeMode,
+          createdById: null,
+        });
+
+        const ticketKey = formatTicketKey(project.slug, ticket.number);
+        return withDirective(
+          MCP_TOOL_NAMES.createTask,
+          {
+            ticketKey,
+            status: ticket.status,
+          },
+          {
+            ticket,
+            ticketKey,
+            project,
+            readinessIssues: ticket.readinessIssues,
+          },
+        );
+      } catch (error) {
+        if (error instanceof IntakeValidationError) {
+          throw new Error(`${error.message}. Use intakeMode inbox for drafts or fill all required fields.`);
+        }
+        throw error;
+      }
     },
   );
 

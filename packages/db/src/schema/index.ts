@@ -1,3 +1,4 @@
+export * from "./signup-allowlist";
 export * from "./auth";
 export * from "./base";
 export * from "./instance-settings";
@@ -8,6 +9,7 @@ export * from "./provider-connections";
 export * from "./repositories";
 export * from "./tickets";
 
+import * as signupAllowlist from "./signup-allowlist";
 import * as auth from "./auth";
 import * as instanceSettings from "./instance-settings";
 import * as jobs from "./jobs";
@@ -19,6 +21,7 @@ import * as tickets from "./tickets";
 
 export const schema = {
   ...auth.authSchema,
+  ...signupAllowlist,
   ...instanceSettings,
   ...knowledgeRefs,
   ...projects,

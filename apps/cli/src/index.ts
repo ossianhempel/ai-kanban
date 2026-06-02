@@ -80,6 +80,54 @@ program
   });
 
 program
+  .command("list-projects")
+  .description("List kanban projects")
+  .action(async (_flags, command) => {
+    const options = command.parent?.opts() as GlobalOptions;
+    const payload = await request<{ projects: Array<{ id: string; name: string; slug: string }> }>(
+      "/api/projects",
+    );
+    printOutput(payload, options);
+  });
+
+program
+  .command("create")
+  .description("Create a ticket")
+  .requiredOption("--project <slug>", "Project slug")
+  .requiredOption("--title <title>", "Ticket title")
+  .option("--description <text>", "Description")
+  .option("--acceptance-criteria <text>", "Acceptance criteria")
+  .option("--business-context <text>", "Business context")
+  .option("--expected-outcome <text>", "Expected outcome")
+  .option("--priority <priority>", "low, medium, high, or urgent")
+  .option("--repository-id <uuid>", "Linked repository id")
+  .option("--intake-mode <mode>", "inbox or strict", "strict")
+  .action(async (flags, command) => {
+    const options = command.parent?.opts() as GlobalOptions;
+    const { projects } = await request<{ projects: Array<{ id: string; slug: string }> }>("/api/projects");
+    const project = projects.find((row) => row.slug === flags.project);
+    if (!project) {
+      throw new Error(`Project not found: ${flags.project}`);
+    }
+
+    const payload = await request("/api/tickets", {
+      method: "POST",
+      body: JSON.stringify({
+        projectId: project.id,
+        title: flags.title,
+        description: flags.description,
+        acceptanceCriteria: flags.acceptanceCriteria,
+        businessContext: flags.businessContext,
+        expectedOutcome: flags.expectedOutcome,
+        priority: flags.priority,
+        repositoryId: flags.repositoryId ?? null,
+        intakeMode: flags.intakeMode,
+      }),
+    });
+    printOutput(payload, options);
+  });
+
+program
   .command("get-task")
   .description("Get full task context")
   .argument("<taskRef>", "Ticket id or key like AIK-123")
@@ -128,6 +176,26 @@ program
     const payload = await request(`/api/tickets/${encodeURIComponent(taskRef)}/complete`, {
       method: "POST",
       body: JSON.stringify({ summary: flags.summary }),
+    });
+    printOutput(payload, options);
+  });
+
+program
+  .command("add-comment")
+  .description("Add a comment to a ticket")
+  .argument("<taskRef>", "Ticket id or key")
+  .requiredOption("--body <text>", "Comment body")
+  .option("--agent-id <id>", "Agent identifier for automated comments")
+  .option("--kind <kind>", "comment, agent_comment, or clarification_request", "comment")
+  .action(async (taskRef: string, flags, command) => {
+    const options = command.parent?.opts() as GlobalOptions;
+    const payload = await request(`/api/tickets/${encodeURIComponent(taskRef)}/comments`, {
+      method: "POST",
+      body: JSON.stringify({
+        body: flags.body,
+        agentId: flags.agentId,
+        kind: flags.kind,
+      }),
     });
     printOutput(payload, options);
   });

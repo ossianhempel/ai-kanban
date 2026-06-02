@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "ai-kanban": {
+      "url": "http://ai-kanban.65.108.88.160.sslip.io/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_AIKANBAN_API_TOKEN"
+      }
+    }
+  }
+}

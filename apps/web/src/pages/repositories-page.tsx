@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   IconArrowDoorInOutline18,
   IconRefresh2Outline18,
@@ -47,9 +47,11 @@ function providerLabel(provider: SourceProviderId | null) {
 }
 
 export function RepositoriesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [connections, setConnections] = useState<ProviderConnection[]>([]);
+  const [oauthAvailability, setOauthAvailability] = useState({ github: false, azure_devops: false });
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [remoteRepositories, setRemoteRepositories] = useState<RemoteRepository[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
@@ -69,22 +71,37 @@ export function RepositoriesPage() {
   const [scanningId, setScanningId] = useState<string | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ kind: "success" | "error"; message: string } | null>(null);
+
+  const connectNotice = useMemo(() => {
+    const connected = searchParams.get("connected");
+    const connectError = searchParams.get("connect_error");
+    if (connected) {
+      return { kind: "success" as const, message: `${providerLabel(connected as SourceProviderId)} connected.` };
+    }
+    if (connectError) {
+      return { kind: "error" as const, message: connectError };
+    }
+    return null;
+  }, [searchParams]);
 
   async function refresh(projectId?: string) {
     setLoading(true);
     setError(null);
     try {
-      const [{ projects: nextProjects }, { repositories: nextRepos }, { providers: nextProviders }, connectionsResult] =
+      const [{ projects: nextProjects }, { repositories: nextRepos }, { providers: nextProviders }, connectionsResult, oauthResult] =
         await Promise.all([
           api.listProjects(),
           api.listRepositories(projectId),
           api.listProviders(),
           api.listConnections().catch(() => ({ connections: [] as ProviderConnection[] })),
+          api.getConnectionOAuthConfig().catch(() => ({ oauth: { github: false, azure_devops: false } })),
         ]);
       setProjects(nextProjects);
       setRepositories(nextRepos);
       setProviders(nextProviders);
       setConnections(connectionsResult.connections);
+      setOauthAvailability(oauthResult.oauth);
       if (!projectId && nextProjects[0]) {
         setSelectedProjectId(nextProjects[0].id);
       }
@@ -101,6 +118,28 @@ export function RepositoriesPage() {
   useEffect(() => {
     void refresh(selectedProjectId || undefined);
   }, [selectedProjectId]);
+
+  useEffect(() => {
+    if (!connectNotice) {
+      return;
+    }
+    setBanner({ kind: connectNotice.kind, message: connectNotice.message });
+    setSearchParams({}, { replace: true });
+  }, [connectNotice, setSearchParams]);
+
+  function startOAuth(provider: "github" | "azure_devops") {
+    setError(null);
+    const params = new URLSearchParams();
+    if (provider === "azure_devops") {
+      if (!azureOrganization.trim()) {
+        setError("Enter your Azure DevOps organization first.");
+        return;
+      }
+      params.set("organization", azureOrganization.trim());
+    }
+    const query = params.toString();
+    window.location.href = `/api/connections/oauth/${provider}/start${query ? `?${query}` : ""}`;
+  }
 
   useEffect(() => {
     if (!selectedConnectionId) {
@@ -263,11 +302,22 @@ export function RepositoriesPage() {
         <CardHeader>
           <CardTitle>Connect provider</CardTitle>
           <CardDescription>
-            Connect GitHub or Azure DevOps with a personal access token. GitLab uses the same model — adapter coming
-            soon.
+            Sign in with GitHub or Microsoft to import repos. Use a personal access token only if OAuth is unavailable.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {banner ? (
+            <p
+              className={
+                banner.kind === "error"
+                  ? "text-[length:var(--text-sm)] text-[var(--color-danger)]"
+                  : "text-[length:var(--text-sm)] text-[var(--color-success)]"
+              }
+            >
+              {banner.message}
+            </p>
+          ) : null}
+
           {connections.length > 0 ? (
             <div className="space-y-2">
               {connections.map((connection) => (
@@ -293,7 +343,52 @@ export function RepositoriesPage() {
             <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">No provider connections yet.</p>
           )}
 
-          <form className="grid gap-2.5 md:grid-cols-2" onSubmit={handleConnect}>
+          <div className="space-y-3">
+            {oauthAvailability.github ? (
+              <Button type="button" size="sm" disabled={connecting} onClick={() => startOAuth("github")}>
+                {connecting ? "Redirecting…" : "Connect with GitHub"}
+              </Button>
+            ) : null}
+
+            {oauthAvailability.azure_devops ? (
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[220px] flex-1 space-y-1">
+                  <label className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]" htmlFor="ado-org">
+                    Azure DevOps organization
+                  </label>
+                  <Input
+                    id="ado-org"
+                    placeholder="your-org"
+                    value={azureOrganization}
+                    onChange={(event) => setAzureOrganization(event.target.value)}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={connecting || !azureOrganization.trim()}
+                  onClick={() => startOAuth("azure_devops")}
+                >
+                  Connect with Microsoft
+                </Button>
+              </div>
+            ) : null}
+
+            {!oauthAvailability.github && !oauthAvailability.azure_devops ? (
+              <p className="text-[length:var(--text-sm)] text-[var(--color-text-subtle)]">
+                Web sign-in is not configured. Ask your admin to set{" "}
+                <code className="rounded bg-[var(--color-bg-selected)] px-1 py-0.5">GITHUB_OAUTH_*</code> or{" "}
+                <code className="rounded bg-[var(--color-bg-selected)] px-1 py-0.5">MICROSOFT_*</code> env vars, or use
+                a token below.
+              </p>
+            ) : null}
+          </div>
+
+          <details className="rounded-md border border-[var(--color-border)] px-3 py-2">
+            <summary className="cursor-pointer text-[length:var(--text-sm)] text-[var(--color-text-default)]">
+              Advanced: connect with personal access token
+            </summary>
+            <form className="mt-3 grid gap-2.5 md:grid-cols-2" onSubmit={handleConnect}>
             <Select
               value={connectProvider}
               onChange={(event) => setConnectProvider(event.target.value as SourceProviderId)}
@@ -320,10 +415,11 @@ export function RepositoriesPage() {
             ) : null}
             <div className="md:col-span-2">
               <Button type="submit" size="sm" disabled={connecting || !accessToken.trim()}>
-                {connecting ? "Connecting…" : "Connect account"}
+                {connecting ? "Connecting…" : "Connect with token"}
               </Button>
             </div>
           </form>
+          </details>
         </CardContent>
       </Card>
 

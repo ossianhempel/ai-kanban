@@ -103,7 +103,9 @@ HTTP endpoint: `POST /mcp`
 
 Tools:
 
+- `aikanban_list_projects`
 - `aikanban_list_tasks`
+- `aikanban_create_task`
 - `aikanban_claim_task`
 - `aikanban_get_task_context`
 - `aikanban_update_task_status`
@@ -111,6 +113,9 @@ Tools:
 - `aikanban_link_pull_request`
 - `aikanban_create_pull_request`
 - `aikanban_get_repository_activity`
+- `aikanban_add_ticket_comment`
+
+Tool responses include **`agentDirective`** — status-specific workflow instructions (e.g. pre-execution review on `agent_ready` before claim).
 
 ## Source providers (GitHub first)
 

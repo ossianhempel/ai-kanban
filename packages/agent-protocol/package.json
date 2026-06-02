@@ -5,6 +5,9 @@
   "exports": {
     ".": {
       "default": "./src/index.ts"
+    },
+    "./directives": {
+      "default": "./src/directives/index.ts"
     }
   },
   "dependencies": {

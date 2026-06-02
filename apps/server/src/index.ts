@@ -5,6 +5,7 @@ import { createAuth } from "./auth";
 import { createApp } from "./app";
 import { startScheduler } from "./scheduler";
 import { createConnectionService } from "./services/connections";
+import { createAgentDirectiveService } from "./services/agent-directives";
 import { createInstanceService, createKnowledgeService } from "./services/knowledge";
 import { createRepositoryService } from "./services/repositories";
 import { createTicketService } from "./services/tickets";
@@ -16,6 +17,7 @@ const connections = createConnectionService(db);
 const repos = createRepositoryService(db, connections);
 const instance = createInstanceService(db);
 const knowledge = createKnowledgeService(db);
+const agentDirectives = createAgentDirectiveService(db, instance);
 const users = createUserService(db);
 const tickets = createTicketService(db, repos, knowledge, instance);
 
@@ -28,7 +30,7 @@ if (existingProjects.length === 0) {
   });
 }
 
-const app = createApp(db, auth, tickets, repos, connections, instance, knowledge, users);
+const app = createApp(db, auth, tickets, repos, connections, instance, knowledge, users, agentDirectives);
 
 startScheduler(db, tickets);
 

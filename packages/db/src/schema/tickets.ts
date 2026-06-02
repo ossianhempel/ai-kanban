@@ -49,6 +49,9 @@ export const tickets = pgTable(
   (table) => [uniqueIndex("tickets_project_number_idx").on(table.projectId, table.number)],
 );
 
+export const ticketCommentKindEnum = ["comment", "agent_comment", "clarification_request"] as const;
+export type TicketCommentKind = (typeof ticketCommentKindEnum)[number];
+
 export const ticketComments = pgTable("ticket_comments", {
   ...primaryId,
   ticketId: uuid("ticket_id")

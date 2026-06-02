@@ -1,5 +1,5 @@
 import type { Database } from "@ai-kanban/db";
-import { projects, repositories, tickets } from "@ai-kanban/db/schema";
+import { projects, repositories, ticketComments, tickets } from "@ai-kanban/db/schema";
 import {
   assertIntakeReady,
   ClaimNotAllowedError,
@@ -8,6 +8,7 @@ import {
   generateAgentBrief,
   parseTicketRef,
 } from "@ai-kanban/core";
+import { type TicketCommentKind } from "@ai-kanban/agent-protocol";
 import { parsePullRequestUrl } from "@ai-kanban/integrations";
 import {
   extractTicketKeysFromText,
@@ -105,6 +106,7 @@ export function createTicketService(
 
     const ticketKey = formatTicketKey(project.slug, ticket.number);
     const brief = await buildBriefForTicket(ticket, project, repository[0] ?? null);
+    const comments = await listTicketComments(ticket.id);
 
     return {
       ticket,
@@ -112,7 +114,58 @@ export function createTicketService(
       repository: repository[0] ?? null,
       ticketKey,
       brief,
+      comments,
     };
+  }
+
+  async function listTicketComments(ticketId: string) {
+    return db
+      .select()
+      .from(ticketComments)
+      .where(and(eq(ticketComments.ticketId, ticketId), isNull(ticketComments.deletedAt)))
+      .orderBy(asc(ticketComments.createdAt));
+  }
+
+  async function addTicketComment(
+    ref: string,
+    input: {
+      body: string;
+      authorId?: string | null;
+      agentId?: string | null;
+      kind?: TicketCommentKind;
+    },
+  ) {
+    const ticket = await resolveTicket(ref);
+    if (!ticket) {
+      return null;
+    }
+
+    const trimmedBody = input.body.trim();
+    if (!trimmedBody) {
+      throw new Error("Comment body is required");
+    }
+
+    const body = input.agentId
+      ? `**Agent (${input.agentId}):**\n\n${trimmedBody}`
+      : trimmedBody;
+
+    const kind = input.kind ?? (input.agentId ? "agent_comment" : "comment");
+
+    const [comment] = await db
+      .insert(ticketComments)
+      .values({
+        ticketId: ticket.id,
+        authorId: input.authorId ?? null,
+        body,
+        kind,
+      })
+      .returning();
+
+    if (!comment) {
+      throw new Error("Failed to add comment");
+    }
+
+    return { ticket, comment };
   }
 
   async function listTickets(filters: { projectSlug?: string; status?: string } = {}) {
@@ -148,6 +201,7 @@ export function createTicketService(
     priority?: "low" | "medium" | "high" | "urgent";
     repositoryId?: string | null;
     createdById?: string | null;
+    intakeMode?: "inbox" | "strict";
   }) {
     const [row] = await db
       .select({ maxNumber: sql<number>`coalesce(max(${tickets.number}), 0)` })
@@ -165,8 +219,14 @@ export function createTicketService(
       repositoryId: input.repositoryId ?? null,
     };
 
-    assertIntakeReady(readinessInput);
-    const readiness = evaluateReadiness(readinessInput);
+    const intakeMode = input.intakeMode ?? "strict";
+    const readiness =
+      intakeMode === "inbox"
+        ? evaluateReadiness(readinessInput)
+        : assertIntakeReady(readinessInput);
+
+    const status =
+      intakeMode === "inbox" ? ("inbox" as const) : readiness.recommendedStatus;
 
     const [project] = await db.select().from(projects).where(eq(projects.id, input.projectId)).limit(1);
     if (!project) {
@@ -194,7 +254,7 @@ export function createTicketService(
         createdById: input.createdById ?? null,
         readinessScore: readiness.score,
         readinessIssues: readiness.issues,
-        status: readiness.recommendedStatus,
+        status,
       })
       .returning();
 
@@ -369,6 +429,28 @@ export function createTicketService(
 
   async function listProjects() {
     return db.select().from(projects).where(isNull(projects.deletedAt)).orderBy(asc(projects.name));
+  }
+
+  async function resolveProject(input: { projectId?: string; projectSlug?: string }) {
+    if (input.projectId) {
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(and(eq(projects.id, input.projectId), isNull(projects.deletedAt)))
+        .limit(1);
+      return project ?? null;
+    }
+
+    if (input.projectSlug) {
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(and(eq(projects.slug, input.projectSlug), isNull(projects.deletedAt)))
+        .limit(1);
+      return project ?? null;
+    }
+
+    return null;
   }
 
   async function createProject(input: { name: string; slug: string; description?: string }) {
@@ -684,6 +766,8 @@ export function createTicketService(
     resolveTicket,
     getTicketContext,
     listTickets,
+    listTicketComments,
+    addTicketComment,
     createTicket,
     updateTicketStatus,
     updateTicket,
@@ -698,6 +782,7 @@ export function createTicketService(
     syncStoredBriefsForProject,
     syncAllStoredBriefs,
     listProjects,
+    resolveProject,
     createProject,
   };
 }

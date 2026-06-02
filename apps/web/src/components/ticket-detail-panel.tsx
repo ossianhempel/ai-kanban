@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input, Select, Textarea } from "@/components/ui/input";
-import type { Repository, TicketContext, TicketStatus, KnowledgeRef } from "@/lib/api";
+import type { Repository, TicketContext, TicketStatus, KnowledgeRef, TicketComment } from "@/lib/api";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -54,6 +54,26 @@ function BriefList({ items }: { items: string[] }) {
   );
 }
 
+function commentKindTone(kind: TicketComment["kind"]) {
+  if (kind === "clarification_request") return "warning" as const;
+  if (kind === "agent_comment") return "muted" as const;
+  return "default" as const;
+}
+
+function commentKindLabel(kind: TicketComment["kind"]) {
+  if (kind === "clarification_request") return "Clarification";
+  if (kind === "agent_comment") return "Agent";
+  return "Comment";
+}
+
+function formatCommentTime(value: string) {
+  try {
+    return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
 type TicketDetailPanelProps = {
   ticketRef: string | null;
   repositories: Repository[];
@@ -79,6 +99,7 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
   const [ticketRefs, setTicketRefs] = useState<KnowledgeRef[]>([]);
   const [refLabel, setRefLabel] = useState("");
   const [refUrl, setRefUrl] = useState("");
+  const [commentBody, setCommentBody] = useState("");
 
   useEffect(() => {
     if (!ticketRef) {
@@ -257,6 +278,25 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
       await reloadContext();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create pull request");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAddComment(event: React.FormEvent) {
+    event.preventDefault();
+    if (!context || !commentBody.trim()) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await api.addTicketComment(context.ticketKey, { body: commentBody.trim() });
+      setCommentBody("");
+      await reloadContext();
+      onUpdated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add comment");
     } finally {
       setSaving(false);
     }
@@ -459,6 +499,43 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
               ) : (
                 <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
                   Sign in to add ticket doc links.
+                </p>
+              )}
+            </Section>
+
+            <Section title="Comments">
+              {(context.comments ?? []).length > 0 ? (
+                <ul className="space-y-3">
+                  {(context.comments ?? []).map((comment) => (
+                    <li key={comment.id} className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={commentKindTone(comment.kind)}>{commentKindLabel(comment.kind)}</Badge>
+                        <span className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+                          {formatCommentTime(comment.createdAt)}
+                        </span>
+                      </div>
+                      <p className="whitespace-pre-wrap text-[var(--color-text-default)]">{comment.body}</p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[var(--color-text-subtle)]">No comments yet.</p>
+              )}
+              {isSignedIn ? (
+                <form className="mt-3 space-y-2" onSubmit={handleAddComment}>
+                  <Textarea
+                    placeholder="Reply to the agent or add context for the team…"
+                    value={commentBody}
+                    disabled={saving}
+                    onChange={(event) => setCommentBody(event.target.value)}
+                  />
+                  <Button type="submit" size="sm" disabled={saving || !commentBody.trim()}>
+                    Add comment
+                  </Button>
+                </form>
+              ) : (
+                <p className="mt-3 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+                  Sign in to comment on this ticket.
                 </p>
               )}
             </Section>

@@ -1,18 +1,9 @@
 import { z } from "zod";
+import { ticketStatusSchema } from "./status.js";
 
-export const ticketStatusSchema = z.enum([
-  "inbox",
-  "needs_clarification",
-  "ready_for_planning",
-  "agent_ready",
-  "running",
-  "pr_open",
-  "needs_human_review",
-  "done",
-  "blocked",
-]);
-
-export type TicketStatus = z.infer<typeof ticketStatusSchema>;
+export { MCP_TOOL_NAMES } from "./tools.js";
+export type { McpToolName } from "./tools.js";
+export { ticketStatusSchema, type TicketStatus } from "./status.js";
 
 export const agentBriefSchema = z.object({
   task: z.string(),
@@ -28,16 +19,8 @@ export const agentBriefSchema = z.object({
 
 export type AgentBrief = z.infer<typeof agentBriefSchema>;
 
-export const MCP_TOOL_NAMES = {
-  listTasks: "aikanban_list_tasks",
-  claimTask: "aikanban_claim_task",
-  getTaskContext: "aikanban_get_task_context",
-  updateTaskStatus: "aikanban_update_task_status",
-  completeTask: "aikanban_complete_task",
-  linkPullRequest: "aikanban_link_pull_request",
-  createPullRequest: "aikanban_create_pull_request",
-  getRepositoryActivity: "aikanban_get_repository_activity",
-} as const;
+export const ticketCommentKindSchema = z.enum(["comment", "agent_comment", "clarification_request"]);
+export type TicketCommentKind = z.infer<typeof ticketCommentKindSchema>;
 
 export const updateTaskStatusInputSchema = z.object({
   taskRef: z.string().min(1).describe("Ticket id or key like PROJ-123"),
@@ -83,4 +66,34 @@ export const getRepositoryActivityInputSchema = z.object({
   refresh: z.boolean().optional().describe("Force refresh from provider API"),
 });
 
+export const addTicketCommentInputSchema = z.object({
+  taskRef: z.string().min(1).describe("Ticket id or key like PROJ-123"),
+  body: z.string().min(1).describe("Comment text"),
+  agentId: z.string().optional().describe("Agent identifier when posting as an automated agent"),
+  kind: ticketCommentKindSchema.optional().describe("comment, agent_comment, or clarification_request"),
+});
+
+export const createTaskInputSchema = z.object({
+  projectSlug: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("Project slug (e.g. default). Required unless projectId is set."),
+  projectId: z.string().uuid().optional().describe("Project UUID"),
+  title: z.string().min(1).describe("Short task title"),
+  description: z.string().optional().describe("What needs to be done"),
+  acceptanceCriteria: z.string().optional().describe("How we know it is done"),
+  businessContext: z.string().optional().describe("Why this matters"),
+  expectedOutcome: z.string().optional().describe("Expected result when complete"),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional().describe("Ticket priority"),
+  repositoryId: z.string().uuid().nullable().optional().describe("Linked repository id"),
+  intakeMode: z
+    .enum(["inbox", "strict"])
+    .optional()
+    .describe("inbox = draft ticket; strict = require full intake (defaults to agent_ready or needs_clarification)"),
+});
+
+export const listProjectsInputSchema = z.object({});
+
 export * from "./readiness.js";
+export * from "./directives/index.js";

@@ -1,5 +1,7 @@
 import type { Database } from "@ai-kanban/db";
 import { instanceSettings, knowledgeRefs, projects } from "@ai-kanban/db/schema";
+import type { DirectiveTemplateOverrides } from "@ai-kanban/agent-protocol";
+import type { StoredAgentDirectiveOverride } from "@ai-kanban/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 
 export type KnowledgeScope = "instance" | "project" | "ticket";
@@ -17,7 +19,10 @@ export function createInstanceService(db: Database) {
       return row;
     }
 
-    const [created] = await db.insert(instanceSettings).values({ agentPlaybook: "" }).returning();
+    const [created] = await db
+      .insert(instanceSettings)
+      .values({ agentPlaybook: "", agentDirectiveOverrides: {} })
+      .returning();
     return created!;
   }
 
@@ -34,9 +39,22 @@ export function createInstanceService(db: Database) {
     return updated ?? current;
   }
 
+  async function updateDirectiveOverrides(overrides: DirectiveTemplateOverrides) {
+    const current = await getSettings();
+    const stored = overrides as Record<string, StoredAgentDirectiveOverride>;
+    const [updated] = await db
+      .update(instanceSettings)
+      .set({ agentDirectiveOverrides: stored })
+      .where(eq(instanceSettings.id, current.id))
+      .returning();
+
+    return updated ?? current;
+  }
+
   return {
     getSettings,
     updateSettings,
+    updateDirectiveOverrides,
   };
 }
 

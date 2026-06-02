@@ -10,6 +10,7 @@ import type { Database } from "@ai-kanban/db";
 import { env } from "@ai-kanban/env/server";
 import type { Auth } from "./auth";
 import { createMcpServer } from "./mcp/server";
+import { buildMcpPublicConfig } from "./mcp/public-config";
 import type { RepositoryService } from "./services/repositories";
 import type { ConnectionService } from "./services/connections";
 import type { InstanceService, KnowledgeService } from "./services/knowledge";
@@ -20,9 +21,24 @@ import { createAzureDevOpsWebhookHandler } from "./webhooks/azure-devops";
 import { ClaimNotAllowedError, IntakeValidationError } from "@ai-kanban/core";
 import { sourceProviderIdSchema } from "@ai-kanban/integrations";
 import { isAdmin, authorizeUser } from "./authz";
-import { getUserCount, resolveSignupPolicy } from "./signup-policy";
+import {
+  addSignupAllowlistEntry,
+  getSignupPolicySettings,
+  removeSignupAllowlistEntry,
+  resolveSignupPolicy,
+  updateSignupAllowPublic,
+} from "./signup-policy";
 import { buildPublicAuthConfig } from "./auth-providers";
 import { createApiTokenMiddleware, invalidateApiTokenUserCache } from "./api-token";
+import {
+  buildProviderAuthorizeUrl,
+  createProviderOAuthState,
+  exchangeProviderOAuthCode,
+  getProviderOAuthAvailability,
+  parseProviderOAuthState,
+} from "./provider-oauth";
+import { MCP_TOOL_NAMES, resolveAgentDirective } from "@ai-kanban/agent-protocol";
+import type { AgentDirectiveService } from "./services/agent-directives";
 
 const createProjectSchema = z.object({
   name: z.string().min(1),
@@ -39,6 +55,7 @@ const createTicketSchema = z.object({
   expectedOutcome: z.string().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
   repositoryId: z.string().uuid().nullable().optional(),
+  intakeMode: z.enum(["inbox", "strict"]).optional(),
 });
 
 const updateStatusSchema = z.object({
@@ -141,9 +158,10 @@ export function createApp(
   instance: InstanceService,
   knowledge: KnowledgeService,
   users: UserService,
+  agentDirectives: AgentDirectiveService,
 ) {
   const app = new Hono<{ Variables: AppVariables; Bindings: HttpBindings }>();
-  const mcpServer = createMcpServer(tickets, repos);
+  const mcpServer = createMcpServer(tickets, repos, agentDirectives);
   const githubWebhook = createGitHubWebhookHandler(tickets);
   const azureDevOpsWebhook = createAzureDevOpsWebhookHandler(tickets);
 
@@ -176,8 +194,8 @@ export function createApp(
   app.get("/health", (c) => c.json({ ok: true }));
 
   app.get("/api/auth/config", async (c) => {
-    const userCount = await getUserCount(db);
-    return c.json(buildPublicAuthConfig(resolveSignupPolicy(userCount)));
+    const policy = await resolveSignupPolicy(db);
+    return c.json(buildPublicAuthConfig(policy));
   });
 
   app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
@@ -229,6 +247,124 @@ export function createApp(
       console.error("Failed to refresh ticket briefs after instance settings update", error);
     });
     return c.json({ settings });
+  });
+
+  app.get("/api/instance/agent-directives", async (c) => {
+    const auth = authorizeUser(c.get("user"));
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const templates = await agentDirectives.listTemplates();
+    return c.json({ templates });
+  });
+
+  app.get("/api/instance/agent-directives/:templateId", async (c) => {
+    const auth = authorizeUser(c.get("user"));
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+    const template = await agentDirectives.getTemplate(c.req.param("templateId"));
+    if (!template) {
+      return c.json({ error: "Directive template not found" }, 404);
+    }
+    return c.json({ template });
+  });
+
+  app.patch("/api/instance/agent-directives/:templateId", async (c) => {
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+
+    const body = z
+      .object({
+        title: z.string().min(1).optional(),
+        body: z.string().min(1).optional(),
+        priority: z.enum(["mandatory", "recommended"]).optional(),
+      })
+      .parse(await c.req.json());
+
+    try {
+      const template = await agentDirectives.updateTemplateOverride(c.req.param("templateId"), body);
+      return c.json({ template });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update directive";
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.delete("/api/instance/agent-directives/:templateId", async (c) => {
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+
+    try {
+      const template = await agentDirectives.resetTemplateOverride(c.req.param("templateId"));
+      if (!template) {
+        return c.json({ error: "Directive template not found" }, 404);
+      }
+      return c.json({ template });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to reset directive";
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.get("/api/instance/signup-policy", async (c) => {
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+
+    return c.json(await getSignupPolicySettings(db));
+  });
+
+  app.patch("/api/instance/signup-policy", async (c) => {
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+
+    const body = z.object({ allowPublicSignup: z.boolean() }).parse(await c.req.json());
+    await updateSignupAllowPublic(db, body.allowPublicSignup);
+    return c.json(await getSignupPolicySettings(db));
+  });
+
+  app.post("/api/instance/signup-allowlist", async (c) => {
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+
+    const body = z
+      .object({
+        kind: z.enum(["email", "domain"]),
+        value: z.string().min(1),
+      })
+      .parse(await c.req.json());
+
+    try {
+      const entry = await addSignupAllowlistEntry(db, body.kind, body.value);
+      return c.json({ entry, ...(await getSignupPolicySettings(db)) }, 201);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add allowlist entry";
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.delete("/api/instance/signup-allowlist/:id", async (c) => {
+    const auth = authorizeUser(c.get("user"), { admin: true });
+    if (!auth.ok) {
+      return c.json({ error: auth.error }, auth.status);
+    }
+
+    const entry = await removeSignupAllowlistEntry(db, c.req.param("id"));
+    if (!entry) {
+      return c.json({ error: "Allowlist entry not found" }, 404);
+    }
+
+    return c.json({ entry, ...(await getSignupPolicySettings(db)) });
   });
 
   app.get("/api/users", async (c) => {
@@ -372,7 +508,16 @@ export function createApp(
     if (!context) {
       return c.json({ error: "Ticket not found" }, 404);
     }
-    return c.json(context);
+    const templateOverrides = await agentDirectives.getOverrides();
+    const agentDirective = resolveAgentDirective(
+      MCP_TOOL_NAMES.getTaskContext,
+      {
+        ticketKey: context.ticketKey,
+        status: context.ticket.status,
+      },
+      { templateOverrides },
+    );
+    return c.json({ ...context, agentDirective });
   });
 
   app.patch("/api/tickets/:ref/status", async (c) => {
@@ -411,6 +556,36 @@ export function createApp(
     return c.json({ ticket });
   });
 
+  app.get("/api/tickets/:ref/comments", async (c) => {
+    const ticket = await tickets.resolveTicket(c.req.param("ref"));
+    if (!ticket) {
+      return c.json({ error: "Ticket not found" }, 404);
+    }
+    const comments = await tickets.listTicketComments(ticket.id);
+    return c.json({ comments });
+  });
+
+  app.post("/api/tickets/:ref/comments", async (c) => {
+    const body = z
+      .object({
+        body: z.string().min(1),
+        agentId: z.string().optional(),
+        kind: z.enum(["comment", "agent_comment", "clarification_request"]).optional(),
+      })
+      .parse(await c.req.json());
+    const user = c.get("user");
+    const result = await tickets.addTicketComment(c.req.param("ref"), {
+      body: body.body,
+      authorId: user?.id ?? null,
+      agentId: body.agentId,
+      kind: body.kind,
+    });
+    if (!result) {
+      return c.json({ error: "Ticket not found" }, 404);
+    }
+    return c.json(result, 201);
+  });
+
   app.patch("/api/tickets/:ref", async (c) => {
     const body = updateTicketSchema.parse(await c.req.json());
     const ticket = await tickets.updateTicket(c.req.param("ref"), body);
@@ -445,6 +620,114 @@ export function createApp(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to create pull request";
       return c.json({ error: message }, 400);
+    }
+  });
+
+  app.get("/api/mcp/config", async (c) => {
+    return c.json({
+      config: buildMcpPublicConfig({
+        webOrigin: env.WEB_ORIGIN,
+        apiTokenConfigured: Boolean(env.AIKANBAN_API_TOKEN),
+      }),
+    });
+  });
+
+  app.get("/api/agent/integration", async (c) => {
+    const user = c.get("user");
+    const config = buildMcpPublicConfig({
+      webOrigin: env.WEB_ORIGIN,
+      apiTokenConfigured: Boolean(env.AIKANBAN_API_TOKEN),
+    });
+    return c.json({
+      mcpUrl: config.mcpUrl,
+      apiTokenConfigured: config.auth.configured,
+      tools: config.tools,
+      isAdmin: isAdmin(user),
+      clients: config.clients,
+    });
+  });
+
+  app.get("/api/connections/oauth/config", async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    return c.json({ oauth: getProviderOAuthAvailability() });
+  });
+
+  app.get("/api/connections/oauth/:provider/start", async (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const provider = sourceProviderIdSchema.parse(c.req.param("provider"));
+    if (provider === "gitlab") {
+      return c.json({ error: "GitLab OAuth is not available yet" }, 501);
+    }
+
+    const availability = getProviderOAuthAvailability();
+    if (provider === "github" && !availability.github) {
+      return c.json({ error: "GitHub OAuth is not configured on this instance" }, 503);
+    }
+    if (provider === "azure_devops" && !availability.azure_devops) {
+      return c.json({ error: "Microsoft OAuth is not configured on this instance" }, 503);
+    }
+
+    const organization = c.req.query("organization") ?? undefined;
+    if (provider === "azure_devops" && !organization?.trim()) {
+      return c.json({ error: "Azure DevOps organization is required" }, 400);
+    }
+
+    try {
+      const state = createProviderOAuthState({
+        userId: user.id,
+        provider,
+        organization: organization?.trim(),
+      });
+      const authorizeUrl = buildProviderAuthorizeUrl(provider, state, { organization: organization?.trim() });
+      return c.redirect(authorizeUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to start OAuth";
+      return c.json({ error: message }, 400);
+    }
+  });
+
+  app.get("/api/connections/oauth/:provider/callback", async (c) => {
+    const provider = sourceProviderIdSchema.parse(c.req.param("provider"));
+    const code = c.req.query("code");
+    const stateRaw = c.req.query("state");
+    const oauthError = c.req.query("error");
+
+    if (oauthError) {
+      return c.redirect(`${env.WEB_ORIGIN}/repositories?connect_error=${encodeURIComponent(oauthError)}`);
+    }
+
+    if (!code || !stateRaw) {
+      return c.redirect(`${env.WEB_ORIGIN}/repositories?connect_error=missing_code`);
+    }
+
+    const state = parseProviderOAuthState(stateRaw);
+    if (!state || state.provider !== provider) {
+      return c.redirect(`${env.WEB_ORIGIN}/repositories?connect_error=invalid_state`);
+    }
+
+    try {
+      const tokens = await exchangeProviderOAuthCode(provider, code);
+      const credentials =
+        provider === "github"
+          ? { kind: "github_pat" as const, accessToken: tokens.accessToken }
+          : {
+              kind: "azure_devops_pat" as const,
+              organization: state.organization ?? "",
+              accessToken: tokens.accessToken,
+            };
+
+      await connections.createConnection(state.userId, provider, credentials);
+      return c.redirect(`${env.WEB_ORIGIN}/repositories?connected=${provider}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "oauth_failed";
+      return c.redirect(`${env.WEB_ORIGIN}/repositories?connect_error=${encodeURIComponent(message)}`);
     }
   });
 
