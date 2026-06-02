@@ -12,7 +12,9 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { useState } from "react";
+import { MotionIn } from "@/components/motion";
 import { Badge } from "@/components/ui/badge";
+import { motionClass } from "@/lib/motion";
 import type { Ticket, TicketStatus } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -76,7 +78,12 @@ function DraggableTicketCard({
 
   return (
     <div ref={setNodeRef} style={style} className={cn(isDragging && "opacity-40")}>
-      <div className="flex gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] transition hover:bg-[var(--color-bg-selected)]">
+      <div
+        className={cn(
+          "flex gap-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] hover:bg-[var(--color-bg-selected)]",
+          motionClass.pressable,
+        )}
+      >
         <button
           type="button"
           ref={setActivatorNodeRef}
@@ -135,7 +142,8 @@ function KanbanColumn({
       <div
         ref={setNodeRef}
         className={cn(
-          "flex min-h-[120px] flex-1 flex-col gap-2 p-2 transition",
+          "flex min-h-[120px] flex-1 flex-col gap-2 p-2",
+          motionClass.surface,
           isOver && "bg-[var(--color-bg-selected)]/40 ring-1 ring-inset ring-[var(--color-border)]",
         )}
       >
@@ -145,7 +153,9 @@ function KanbanColumn({
           </p>
         ) : (
           tickets.map((ticket) => (
-            <DraggableTicketCard key={ticket.id} ticket={ticket} onSelect={onSelectTicket} />
+            <MotionIn key={ticket.id}>
+              <DraggableTicketCard ticket={ticket} onSelect={onSelectTicket} />
+            </MotionIn>
           ))
         )}
       </div>

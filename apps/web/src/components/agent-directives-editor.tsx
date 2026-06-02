@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { MotionCollapse, MotionIn } from "@/components/motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -177,14 +178,18 @@ export function AgentDirectivesEditor({
               </optgroup>
             ))}
           </Select>
-          {selected ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="muted">{selected.phase}</Badge>
-              {selected.isCustomized ? <Badge tone="warning">Customized</Badge> : <Badge tone="success">Default</Badge>}
-            </div>
-          ) : null}
+          <MotionCollapse open={Boolean(selected)}>
+            {selected ? (
+              <div className="flex flex-wrap items-center gap-2 pb-2">
+                <Badge tone="muted">{selected.phase}</Badge>
+                {selected.isCustomized ? <Badge tone="warning">Customized</Badge> : <Badge tone="success">Default</Badge>}
+              </div>
+            ) : null}
+          </MotionCollapse>
         </div>
 
+        <MotionCollapse open={Boolean(selected)}>
+        <MotionIn key={selectedId} variant="fade">
         <form className="space-y-3" onSubmit={handleSave}>
           <div className="space-y-1.5">
             <label className="text-[length:var(--text-sm)] font-medium text-[var(--color-text-strong)]">Title</label>
@@ -235,6 +240,8 @@ export function AgentDirectivesEditor({
             </div>
           ) : null}
         </form>
+        </MotionIn>
+        </MotionCollapse>
       </CardContent>
     </Card>
   );

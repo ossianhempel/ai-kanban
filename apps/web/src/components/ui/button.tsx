@@ -1,10 +1,14 @@
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
+import { motionClass } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-border-strong)] disabled:pointer-events-none disabled:opacity-40",
+  cn(
+    "inline-flex items-center justify-center gap-1.5 rounded-md font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--color-border-strong)] disabled:pointer-events-none disabled:opacity-40",
+    motionClass.pressable,
+  ),
   {
     variants: {
       variant: {

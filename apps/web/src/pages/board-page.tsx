@@ -4,6 +4,7 @@ import { evaluateReadiness } from "@ai-kanban/agent-protocol";
 import { IconFolderOutline18, IconPlusOutline18 } from "nucleo-ui-essential-outline-18";
 import { AppHeader } from "@/components/app-header";
 import { KanbanBoard } from "@/components/kanban-board";
+import { MotionCollapse, MotionOverlay, MotionSlidePanel } from "@/components/motion";
 import { TicketDetailPanel } from "@/components/ticket-detail-panel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -254,11 +255,11 @@ export function BoardPage() {
               </p>
             ) : null}
             <div className="md:col-span-2 space-y-2">
-              {intakeStarted && !canSubmitStrictIntake ? (
-                <p className="text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
+              <MotionCollapse open={intakeStarted && !canSubmitStrictIntake}>
+                <p className="pb-0.5 text-[length:var(--text-xs)] text-[var(--color-text-subtle)]">
                   For Agent Ready: {intakeReadiness.issues.join(" · ")}
                 </p>
-              ) : null}
+              </MotionCollapse>
               <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
@@ -291,22 +292,21 @@ export function BoardPage() {
         />
       )}
 
-      {selectedTicketRef ? (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-40 bg-black/40"
-            aria-label="Close ticket panel"
-            onClick={() => setSelectedTicketRef(null)}
-          />
+      <MotionOverlay
+        open={Boolean(selectedTicketRef)}
+        aria-label="Close ticket panel"
+        onClose={() => setSelectedTicketRef(null)}
+      />
+      <MotionSlidePanel open={Boolean(selectedTicketRef)}>
+        {selectedTicketRef ? (
           <TicketDetailPanel
             ticketRef={selectedTicketRef}
             repositories={repositories}
             onClose={() => setSelectedTicketRef(null)}
             onUpdated={() => void refresh()}
           />
-        </>
-      ) : null}
+        ) : null}
+      </MotionSlidePanel>
     </div>
   );
 }

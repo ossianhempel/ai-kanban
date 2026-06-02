@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { IconXmarkOutline18 } from "nucleo-ui-essential-outline-18";
+import { MotionCollapse } from "@/components/motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -8,7 +9,6 @@ import { Input, Select, Textarea } from "@/components/ui/input";
 import type { Repository, TicketContext, TicketStatus, KnowledgeRef, TicketComment } from "@/lib/api";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
 
 const statusLabels: Record<TicketStatus, string> = {
   inbox: "Inbox",
@@ -312,11 +312,7 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
     (context.ticket.status === "running" || context.ticket.status === "agent_ready" || !context.ticket.pullRequestUrl);
 
   return (
-    <aside
-      className={cn(
-        "fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-[var(--color-border)] bg-[var(--color-bg-elevated)]",
-      )}
-    >
+    <aside className="flex h-full min-h-0 flex-col">
       <header className="flex items-start justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
         <div>
           {context ? (
@@ -587,14 +583,14 @@ export function TicketDetailPanel({ ticketRef, repositories, onClose, onUpdated 
               )}
             </Section>
 
-            {editing ? (
-              <div className="space-y-2">
+            <MotionCollapse open={editing}>
+              <div className="space-y-2 pt-0.5">
                 <Input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Title" />
                 <Button size="sm" disabled={saving || !draftTitle.trim()} onClick={() => void handleSaveDetails()}>
                   {saving ? "Saving…" : "Save and re-evaluate readiness"}
                 </Button>
               </div>
-            ) : null}
+            </MotionCollapse>
 
             <Section title="Agent brief">
               <p className="mb-2 font-medium text-[var(--color-text-strong)]">{context.brief.task}</p>
