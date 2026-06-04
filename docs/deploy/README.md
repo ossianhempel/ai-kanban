@@ -6,6 +6,7 @@
 |------|--------|
 | **Fastest install (Azure VM, Hetzner, any Linux)** | **[Azure quickstart](./azure-quickstart.md)** — one script, Docker + HTTPS |
 | **Full operator manual (git clone)** | **[Install from source](./installation-from-source.md)** — `update-installation.sh`, `pnpm cli update` |
+| **External Postgres (App Service, managed DB)** | **[External PostgreSQL](./external-postgres.md)** — `DATABASE_URL=postgres://…`, Azure App Service path |
 | **Existing Coolify / PaaS** | [Coolify](./coolify.md) |
 
 ## Deployment model
@@ -35,6 +36,7 @@ You do **not** need a second repository or a fork. Add workflows and secrets to 
 | **[Install from source](./installation-from-source.md)** | Operators — git clone, first run, update |
 | **[Azure quickstart](./azure-quickstart.md)** | Work Azure subscription — ~20 min, one script |
 | [Azure VM](./azure-vm.md) | Full Azure reference (paths A/B, NSG, backup) |
+| [External PostgreSQL](./external-postgres.md) | Point at managed/external Postgres; Azure App Service + Flexible Server |
 | [Coolify](./coolify.md) | Self-hosted PaaS on Hetzner / VPS |
 | [Microsoft SSO](./microsoft-sso.md) | Entra ID / Azure AD sign-in |
 | [Agent loop (MCP)](../agent-loop.md) | Claude/Cursor setup, claim vs clarification workflow |
@@ -85,9 +87,11 @@ Defaults (usually fine):
 |----------|---------|
 | `PORT` | `3000` |
 | `AIKANBAN_DATA_DIR` | `/app/data` |
-| `DATABASE_URL` | `file:/app/data/pglite` |
+| `DATABASE_URL` | `file:/app/data/pglite` (embedded PGlite) — set `postgres://…?sslmode=require` for [external Postgres](./external-postgres.md) |
 
 Optional: `GITHUB_WEBHOOK_SECRET`, `AIKANBAN_API_TOKEN`
+
+> Using external Postgres? See **[External PostgreSQL](./external-postgres.md)**. With Postgres, the `./data` volume (step 2 below) is no longer required.
 
 ## Updates
 

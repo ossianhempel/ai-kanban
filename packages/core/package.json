@@ -10,7 +10,8 @@
   "dependencies": {
     "@ai-kanban/agent-protocol": "workspace:*",
     "@ai-kanban/db": "workspace:*",
-    "drizzle-orm": "^0.44.2"
+    "drizzle-orm": "^0.44.2",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@ai-kanban/config": "workspace:*",

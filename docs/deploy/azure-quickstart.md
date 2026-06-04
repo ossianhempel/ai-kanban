@@ -182,12 +182,14 @@ docker compose up -d
 
 ## When not to use a VM
 
-| Option | Why skip for now |
-|--------|------------------|
-| Azure Container Apps | PGlite + network storage is unreliable |
-| App Service | Weak persistent disk story for embedded DB |
+A VM + Docker with **embedded PGlite** on local disk is the simplest path. Platforms with only network-backed storage (Container Apps, App Service) are unreliable for the embedded DB — but you can now run them by pointing AI Kanban at **external Postgres** instead:
 
-Stick with **VM + Docker** until external Postgres is supported.
+| Option | Embedded PGlite | With external Postgres |
+|--------|-----------------|------------------------|
+| Azure Container Apps | PGlite + network storage is unreliable | ✅ Supported — see [External PostgreSQL](./external-postgres.md) |
+| App Service for Containers | Weak persistent disk story for embedded DB | ✅ Supported — see [External PostgreSQL](./external-postgres.md) |
+
+Stick with **VM + Docker + PGlite** for the simplest single-host install; switch to **[external Postgres](./external-postgres.md)** when you need App Service / Container Apps or managed-DB backups.
 
 ---
 

@@ -43,13 +43,36 @@ export function resolveDataDir(dataDir = env.AIKANBAN_DATA_DIR) {
   return resolve(repoRoot, dataDir);
 }
 
+export type DatabaseBackend =
+  | { kind: "pglite"; path: string }
+  | { kind: "postgres"; url: string };
+
+function isPostgresUrl(databaseUrl: string) {
+  return databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://");
+}
+
+/**
+ * Classify DATABASE_URL into a typed backend descriptor.
+ * - `postgres://` / `postgresql://` → external Postgres (URL passed through verbatim)
+ * - `file:` or a bare path → embedded PGlite (resolved to an absolute filesystem path)
+ */
+export function resolveDatabaseBackend(databaseUrl = env.DATABASE_URL): DatabaseBackend {
+  if (isPostgresUrl(databaseUrl)) {
+    return { kind: "postgres", url: databaseUrl };
+  }
+
+  return { kind: "pglite", path: resolvePglitePath(databaseUrl) };
+}
+
 export function resolvePglitePath(databaseUrl = env.DATABASE_URL) {
   if (databaseUrl.startsWith("file:")) {
     return resolve(repoRoot, databaseUrl.slice("file:".length));
   }
 
-  if (databaseUrl.startsWith("postgres://") || databaseUrl.startsWith("postgresql://")) {
-    throw new Error("PostgreSQL is not configured yet. Use a file: DATABASE_URL for PGlite.");
+  if (isPostgresUrl(databaseUrl)) {
+    throw new Error(
+      "resolvePglitePath called with a postgres:// URL. Use resolveDatabaseBackend for backend selection.",
+    );
   }
 
   return resolve(repoRoot, databaseUrl);

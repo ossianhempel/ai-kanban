@@ -148,7 +148,9 @@ Copy the production override:
 cp docs/deploy/examples/docker-compose.prod.yml docker-compose.prod.yml
 ```
 
-This binds the app to `127.0.0.1:3000` on the host (so only Caddy/nginx exposes it publicly) and mounts `./data` for the database.
+This binds the app to `127.0.0.1:3000` on the host (so only Caddy/nginx exposes it publicly) and mounts `./data` for the embedded PGlite database.
+
+> To use an **external PostgreSQL** server instead of PGlite, set `DATABASE_URL=postgres://…?sslmode=require` in `.env` — the `./data` mount is then unnecessary. See [external-postgres.md](./external-postgres.md).
 
 Create the data directory:
 

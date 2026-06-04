@@ -11,9 +11,11 @@ Deploy AI Kanban on an **Azure Linux VM** with Docker Compose and Caddy for HTTP
 | Approach | Verdict |
 |----------|---------|
 | **Azure VM + Docker** | Recommended — local disk for PGlite, stable URL for ADO hooks, matches how the app is built |
-| Container Apps | PGlite on network storage is unreliable; better after Postgres support lands |
-| App Service | Awkward persistent disk story for embedded DB |
+| Container Apps | PGlite on network storage is unreliable — use **[external Postgres](./external-postgres.md)** here |
+| App Service | Awkward persistent disk story for embedded DB — use **[external Postgres](./external-postgres.md)** ("option A") |
 | AKS | Overkill for a small team control plane |
+
+> This guide covers the **PGlite on local disk** path. To run on App Service / Container Apps with a managed database, see **[External PostgreSQL](./external-postgres.md)**.
 
 ## Architecture
 

@@ -1,42 +1,67 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-import { PGlite } from "@electric-sql/pglite";
-import { resolvePglitePath } from "@ai-kanban/env/server";
-import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import { fileURLToPath } from "node:url";
+import { PGlite } from "@electric-sql/pglite";
+import { resolveDatabaseBackend } from "@ai-kanban/env/server";
+import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
+import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
+import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
+import { migrate as migratePostgres } from "drizzle-orm/postgres-js/migrator";
+import postgres from "postgres";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { schema } from "./schema/index";
 
-export type Database = ReturnType<typeof drizzle<typeof schema>>;
+// Both PGlite and postgres-js Drizzle instances are PgDatabase subtypes sharing
+// the query-builder API used across services, so consumers take one type
+// regardless of which driver is underneath.
+export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 export type DatabaseContext = {
   db: Database;
-  client: PGlite;
+  close: () => Promise<void>;
 };
 
 let cached: DatabaseContext | null = null;
+
+function migrationsFolder() {
+  return fileURLToPath(new URL("../drizzle", import.meta.url));
+}
+
+async function createPgliteContext(path: string): Promise<DatabaseContext> {
+  await mkdir(dirname(path), { recursive: true });
+
+  const client = new PGlite(path);
+  const db = drizzlePglite({ client, schema });
+  await migratePglite(db, { migrationsFolder: migrationsFolder() });
+
+  return { db: db as Database, close: () => client.close() };
+}
+
+async function createPostgresContext(url: string): Promise<DatabaseContext> {
+  const client = postgres(url);
+  const db = drizzlePostgres(client, { schema });
+  await migratePostgres(db, { migrationsFolder: migrationsFolder() });
+
+  return { db: db as Database, close: () => client.end() };
+}
 
 export async function createDatabase(databaseUrl?: string): Promise<DatabaseContext> {
   if (cached) {
     return cached;
   }
 
-  const dataDir = resolvePglitePath(databaseUrl);
-  await mkdir(dirname(dataDir), { recursive: true });
+  const backend = resolveDatabaseBackend(databaseUrl);
+  cached =
+    backend.kind === "postgres"
+      ? await createPostgresContext(backend.url)
+      : await createPgliteContext(backend.path);
 
-  const client = new PGlite(dataDir);
-  const db = drizzle({ client, schema });
-
-  const migrationsFolder = fileURLToPath(new URL("../drizzle", import.meta.url));
-  await migrate(db, { migrationsFolder });
-
-  cached = { db, client };
   return cached;
 }
 
 export async function closeDatabase() {
   if (cached) {
-    await cached.client.close();
+    await cached.close();
     cached = null;
   }
 }

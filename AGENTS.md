@@ -4,6 +4,8 @@ Self-hostable, AI-native Kanban: humans intake work, agents claim tickets and ge
 
 **Also read:** [README.md](./README.md) (overview), [docs/agent-loop.md](./docs/agent-loop.md) (MCP claim/clarify workflow), [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md) (operator install + update), [docs/deploy/](./docs/deploy/README.md) (other hosting options).
 
+Read VISION.md to understand what we want to achieve and where this project is going.
+
 ---
 
 ## Local development
@@ -55,7 +57,7 @@ Key vars in `.env`:
 | `WEB_DEV_PORT` | Vite port (default `5180`) |
 | `BETTER_AUTH_URL` / `WEB_ORIGIN` | Must match web origin (e.g. `http://localhost:5180`) |
 | `BETTER_AUTH_SECRET` | Auth signing secret (min 16 chars) |
-| `DATABASE_URL` | `file:./data/pglite` for embedded PGlite |
+| `DATABASE_URL` | `file:./data/pglite` for embedded PGlite, or `postgres://…?sslmode=require` for external Postgres (scheme selects the backend — see [docs/deploy/external-postgres.md](docs/deploy/external-postgres.md)) |
 | `AIKANBAN_API_URL` | CLI target (e.g. `http://localhost:3000`) |
 
 Data lives under `./data/pglite`. Back up `./data` before risky experiments.
@@ -287,4 +289,5 @@ packages/integrations/   GitHub, Azure DevOps adapters; GitLab stubbed
 | [docs/deploy/installation-from-source.md](./docs/deploy/installation-from-source.md) | Operator install + update |
 | [docs/deploy/README.md](./docs/deploy/README.md) | Deploy index |
 | [docs/deploy/azure-vm.md](./docs/deploy/azure-vm.md) | Azure VM specifics |
+| [docs/deploy/external-postgres.md](./docs/deploy/external-postgres.md) | External Postgres backend + Azure App Service path |
 | [docs/deploy/templates/](./docs/deploy/templates/README.md) | GitHub Actions CI/CD copy-paste |

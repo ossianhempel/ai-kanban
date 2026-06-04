@@ -8,7 +8,7 @@ Open-source, self-hostable AI-native Kanban platform — the control plane betwe
 
 - **Server:** Hono (Node) — API, scheduler, MCP endpoint, static UI
 - **Web:** Vite + React Router + Tailwind + shadcn-style components
-- **Database:** PGlite + Drizzle ORM
+- **Database:** PGlite (embedded, default) or external PostgreSQL + Drizzle ORM
 - **Auth:** Better Auth
 - **CLI:** `aikanban` (commander)
 - **Jobs:** DB-backed job table + node-cron worker loop
@@ -91,11 +91,13 @@ Default (embedded):
 DATABASE_URL=file:./data/pglite
 ```
 
-Future external Postgres:
+External PostgreSQL (managed or self-hosted) — the scheme selects the backend, migrations run automatically, no other config changes:
 
 ```
-DATABASE_URL=postgres://user:pass@host:5432/aikanban
+DATABASE_URL=postgres://user:pass@host:5432/aikanban?sslmode=require
 ```
+
+Managed providers (Azure Flexible Server, Neon, Supabase, RDS) require `sslmode=require`. See **[docs/deploy/external-postgres.md](docs/deploy/external-postgres.md)** for the full guide, including the Azure App Service + managed-Postgres path.
 
 ## MCP
 
